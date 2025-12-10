@@ -42,7 +42,7 @@ export interface StatResult {
 }
 
 // Auto Mode types - Import from electron.d.ts to avoid duplication
-import type { AutoModeEvent } from "@/types/electron";
+import type { AutoModeEvent, ModelDefinition, ProviderStatus } from "@/types/electron";
 
 export interface AutoModeAPI {
   start: (projectPath: string) => Promise<{ success: boolean; error?: string }>;
@@ -92,6 +92,39 @@ export interface ElectronAPI {
       linux?: string;
       npm?: string;
     };
+    error?: string;
+  }>;
+  checkCodexCli?: () => Promise<{
+    success: boolean;
+    status?: string;
+    method?: string;
+    version?: string;
+    path?: string;
+    hasApiKey?: boolean;
+    recommendation?: string;
+    installCommands?: {
+      macos?: string;
+      windows?: string;
+      linux?: string;
+      npm?: string;
+    };
+    error?: string;
+  }>;
+  model?: {
+    getAvailable: () => Promise<{
+      success: boolean;
+      models?: ModelDefinition[];
+      error?: string;
+    }>;
+    checkProviders: () => Promise<{
+      success: boolean;
+      providers?: Record<string, ProviderStatus>;
+      error?: string;
+    }>;
+  };
+  testOpenAIConnection?: (apiKey?: string) => Promise<{
+    success: boolean;
+    message?: string;
     error?: string;
   }>;
 }
@@ -358,6 +391,28 @@ export const getElectronAPI = (): ElectronAPI => {
       console.log("[Mock] Saved image to temp:", tempFilePath);
       return { success: true, path: tempFilePath };
     },
+
+    checkClaudeCli: async () => ({
+      success: false,
+      status: "not_installed",
+      recommendation: "Claude CLI checks are unavailable in the web preview.",
+    }),
+
+    checkCodexCli: async () => ({
+      success: false,
+      status: "not_installed",
+      recommendation: "Codex CLI checks are unavailable in the web preview.",
+    }),
+
+    model: {
+      getAvailable: async () => ({ success: true, models: [] }),
+      checkProviders: async () => ({ success: true, providers: {} }),
+    },
+
+    testOpenAIConnection: async () => ({
+      success: false,
+      error: "OpenAI connection test is only available in the Electron app.",
+    }),
 
     // Mock Auto Mode API
     autoMode: createMockAutoModeAPI(),

@@ -191,7 +191,7 @@ export function KanbanCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "cursor-grab active:cursor-grabbing transition-all backdrop-blur-sm border-border relative",
+        "cursor-grab active:cursor-grabbing transition-all backdrop-blur-sm border-border relative kanban-card-content",
         isDragging && "opacity-50 scale-105 shadow-lg",
         isCurrentAutoTask &&
           "border-purple-500 border-2 shadow-purple-500/50 shadow-lg animate-pulse"
@@ -260,10 +260,10 @@ export function KanbanCard({
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-sm leading-tight">
+            <CardTitle className="text-sm leading-tight break-words hyphens-auto line-clamp-3">
               {feature.description}
             </CardTitle>
-            <CardDescription className="text-xs mt-1">
+            <CardDescription className="text-xs mt-1 truncate">
               {feature.category}
             </CardDescription>
           </div>
@@ -283,7 +283,7 @@ export function KanbanCard({
                 ) : (
                   <Circle className="w-3 h-3 mt-0.5 shrink-0" />
                 )}
-                <span className="truncate">{step}</span>
+                <span className="break-words hyphens-auto line-clamp-2 leading-relaxed">{step}</span>
               </div>
             ))}
             {feature.steps.length > 3 && (
@@ -302,7 +302,7 @@ export function KanbanCard({
           agentInfo &&
           (isCurrentAutoTask || feature.status === "in_progress") && (
             <div className="mb-3 space-y-1">
-              <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="w-full h-full bg-primary transition-transform duration-500 ease-out origin-left"
                   style={{
@@ -349,7 +349,7 @@ export function KanbanCard({
             {/* Progress Indicator */}
             {(isCurrentAutoTask || feature.status === "in_progress") && (
               <div className="space-y-1">
-                <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className="w-full h-full bg-primary transition-transform duration-500 ease-out origin-left"
                     style={{
@@ -367,7 +367,7 @@ export function KanbanCard({
                     </span>
                     {agentInfo.lastToolUsed && (
                       <span
-                        className="text-zinc-500 truncate max-w-[80px]"
+                        className="text-muted-foreground truncate max-w-[80px]"
                         title={agentInfo.lastToolUsed}
                       >
                         {agentInfo.lastToolUsed}
@@ -403,15 +403,15 @@ export function KanbanCard({
                       ) : todo.status === "in_progress" ? (
                         <Loader2 className="w-2.5 h-2.5 text-amber-400 animate-spin shrink-0" />
                       ) : (
-                        <Circle className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
+                        <Circle className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
                       )}
                       <span
                         className={cn(
-                          "truncate",
+                          "break-words hyphens-auto line-clamp-2 leading-relaxed",
                           todo.status === "completed" &&
-                            "text-zinc-500 line-through",
+                            "text-muted-foreground line-through",
                           todo.status === "in_progress" && "text-amber-400",
-                          todo.status === "pending" && "text-zinc-400"
+                          todo.status === "pending" && "text-foreground-secondary"
                         )}
                       >
                         {todo.content}
@@ -432,7 +432,7 @@ export function KanbanCard({
               feature.status === "verified") && (
               <>
                 {(feature.summary || summary || agentInfo.summary) && (
-                  <div className="space-y-1 pt-1 border-t border-white/5">
+                  <div className="space-y-1 pt-1 border-t border-border-glass">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1 text-[10px] text-green-400">
                         <Sparkles className="w-3 h-3" />
@@ -443,14 +443,14 @@ export function KanbanCard({
                           e.stopPropagation();
                           setIsSummaryDialogOpen(true);
                         }}
-                        className="p-0.5 rounded hover:bg-white/10 transition-colors text-zinc-500 hover:text-zinc-300"
+                        className="p-0.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                         title="View full summary"
                         data-testid={`expand-summary-${feature.id}`}
                       >
                         <Expand className="w-3 h-3" />
                       </button>
                     </div>
-                    <p className="text-[10px] text-zinc-400 line-clamp-3">
+                    <p className="text-[10px] text-foreground-secondary line-clamp-3 break-words hyphens-auto leading-relaxed">
                       {feature.summary || summary || agentInfo.summary}
                     </p>
                   </div>
@@ -460,7 +460,7 @@ export function KanbanCard({
                   !summary &&
                   !agentInfo.summary &&
                   agentInfo.toolCallCount > 0 && (
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1 border-t border-white/5">
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1 border-t border-border-glass">
                       <span className="flex items-center gap-1">
                         <Wrench className="w-2.5 h-2.5" />
                         {agentInfo.toolCallCount} tool calls
@@ -753,7 +753,7 @@ export function KanbanCard({
                 : feature.description}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-4 bg-zinc-900/50 rounded-lg border border-white/10">
+          <div className="flex-1 overflow-y-auto p-4 bg-card rounded-lg border border-border">
             <Markdown>
               {feature.summary ||
                 summary ||

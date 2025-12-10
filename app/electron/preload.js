@@ -141,6 +141,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Claude CLI Detection API
   checkClaudeCli: () => ipcRenderer.invoke("claude:check-cli"),
+
+  // Codex CLI Detection API
+  checkCodexCli: () => ipcRenderer.invoke("codex:check-cli"),
+
+  // Model Management APIs
+  model: {
+    // Get all available models from all providers
+    getAvailable: () => ipcRenderer.invoke("model:get-available"),
+
+    // Check all provider installation status
+    checkProviders: () => ipcRenderer.invoke("model:check-providers"),
+  },
+
+  // OpenAI API
+  testOpenAIConnection: (apiKey) =>
+    ipcRenderer.invoke("openai:test-connection", { apiKey }),
 });
 
 // Also expose a flag to detect if we're in Electron

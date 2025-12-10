@@ -340,6 +340,74 @@ export interface ElectronAPI {
     };
     error?: string;
   }>;
+
+  // Codex CLI Detection API
+  checkCodexCli: () => Promise<{
+    success: boolean;
+    status?: string;
+    method?: string;
+    version?: string;
+    path?: string;
+    hasApiKey?: boolean;
+    recommendation?: string;
+    installCommands?: {
+      macos?: string;
+      windows?: string;
+      linux?: string;
+      npm?: string;
+    };
+    error?: string;
+  }>;
+
+  // Model Management APIs
+  model: {
+    // Get all available models from all providers
+    getAvailable: () => Promise<{
+      success: boolean;
+      models?: ModelDefinition[];
+      error?: string;
+    }>;
+
+    // Check all provider installation status
+    checkProviders: () => Promise<{
+      success: boolean;
+      providers?: Record<string, ProviderStatus>;
+      error?: string;
+    }>;
+  };
+
+  // OpenAI API
+  testOpenAIConnection: (apiKey?: string) => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
+}
+
+// Model definition type
+export interface ModelDefinition {
+  id: string;
+  name: string;
+  modelString: string;
+  provider: "claude" | "codex";
+  description?: string;
+  tier?: "basic" | "standard" | "premium";
+  default?: boolean;
+}
+
+// Provider status type
+export interface ProviderStatus {
+  status: "installed" | "not_installed" | "api_key_only";
+  method?: string;
+  version?: string;
+  path?: string;
+  recommendation?: string;
+  installCommands?: {
+    macos?: string;
+    windows?: string;
+    linux?: string;
+    npm?: string;
+  };
 }
 
 declare global {

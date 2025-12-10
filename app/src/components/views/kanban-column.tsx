@@ -50,7 +50,7 @@ export function KanbanColumn({
         className={cn(
           "flex-1 overflow-y-auto p-2",
           isDoubleWidth
-            ? "columns-2 gap-2 [&>*]:break-inside-avoid [&>*]:mb-2"
+            ? "columns-2 gap-3 [&>*]:break-inside-avoid [&>*]:mb-3 [&>*]:overflow-hidden kanban-columns-layout"
             : "space-y-2"
         )}
       >

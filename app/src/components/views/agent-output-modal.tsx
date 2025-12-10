@@ -246,13 +246,13 @@ export function AgentOutputModal({
               <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
               Agent Output
             </DialogTitle>
-            <div className="flex items-center gap-1 bg-zinc-900/50 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
               <button
                 onClick={() => setViewMode("parsed")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   viewMode === "parsed"
                     ? "bg-purple-500/20 text-purple-300 shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
                 data-testid="view-mode-parsed"
               >
@@ -264,7 +264,7 @@ export function AgentOutputModal({
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   viewMode === "raw"
                     ? "bg-purple-500/20 text-purple-300 shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
                 data-testid="view-mode-raw"
               >

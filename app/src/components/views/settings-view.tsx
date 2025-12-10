@@ -46,8 +46,10 @@ export function SettingsView() {
   } = useAppStore();
   const [anthropicKey, setAnthropicKey] = useState(apiKeys.anthropic);
   const [googleKey, setGoogleKey] = useState(apiKeys.google);
+  const [openaiKey, setOpenaiKey] = useState(apiKeys.openai);
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
   const [showGoogleKey, setShowGoogleKey] = useState(false);
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -74,10 +76,32 @@ export function SettingsView() {
     };
     error?: string;
   } | null>(null);
+  const [codexCliStatus, setCodexCliStatus] = useState<{
+    success: boolean;
+    status?: string;
+    method?: string;
+    version?: string;
+    path?: string;
+    hasApiKey?: boolean;
+    recommendation?: string;
+    installCommands?: {
+      macos?: string;
+      windows?: string;
+      linux?: string;
+      npm?: string;
+    };
+    error?: string;
+  } | null>(null);
+  const [testingOpenaiConnection, setTestingOpenaiConnection] = useState(false);
+  const [openaiTestResult, setOpenaiTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     setAnthropicKey(apiKeys.anthropic);
     setGoogleKey(apiKeys.google);
+    setOpenaiKey(apiKeys.openai);
   }, [apiKeys]);
 
   useEffect(() => {
@@ -89,6 +113,14 @@ export function SettingsView() {
           setClaudeCliStatus(status);
         } catch (error) {
           console.error("Failed to check Claude CLI status:", error);
+        }
+      }
+      if (api?.checkCodexCli) {
+        try {
+          const status = await api.checkCodexCli();
+          setCodexCliStatus(status);
+        } catch (error) {
+          console.error("Failed to check Codex CLI status:", error);
         }
       }
     };
@@ -167,10 +199,64 @@ export function SettingsView() {
     }
   };
 
+  const handleTestOpenaiConnection = async () => {
+    setTestingOpenaiConnection(true);
+    setOpenaiTestResult(null);
+
+    try {
+      const api = getElectronAPI();
+      if (api?.testOpenAIConnection) {
+        const result = await api.testOpenAIConnection(openaiKey);
+        if (result.success) {
+          setOpenaiTestResult({
+            success: true,
+            message: result.message || "Connection successful! OpenAI API responded.",
+          });
+        } else {
+          setOpenaiTestResult({
+            success: false,
+            message: result.error || "Failed to connect to OpenAI API.",
+          });
+        }
+      } else {
+        // Fallback to web API test
+        const response = await fetch("/api/openai/test", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ apiKey: openaiKey }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setOpenaiTestResult({
+            success: true,
+            message: data.message || "Connection successful! OpenAI API responded.",
+          });
+        } else {
+          setOpenaiTestResult({
+            success: false,
+            message: data.error || "Failed to connect to OpenAI API.",
+          });
+        }
+      }
+    } catch (error) {
+      setOpenaiTestResult({
+        success: false,
+        message: "Network error. Please check your connection.",
+      });
+    } finally {
+      setTestingOpenaiConnection(false);
+    }
+  };
+
   const handleSave = () => {
     setApiKeys({
       anthropic: anthropicKey,
       google: googleKey,
+      openai: openaiKey,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -273,7 +359,7 @@ export function SettingsView() {
                     )}
                   </Button>
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   Used for Claude AI features. Get your key at{" "}
                   <a
                     href="https://console.anthropic.com/account/keys"
@@ -367,7 +453,7 @@ export function SettingsView() {
                     )}
                   </Button>
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   Used for Gemini AI features (including image/design prompts).
                   Get your key at{" "}
                   <a
@@ -403,6 +489,99 @@ export function SettingsView() {
                 )}
               </div>
 
+              {/* OpenAI API Key */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="openai-key" className="text-foreground">
+                    OpenAI API Key (Codex/GPT)
+                  </Label>
+                  {apiKeys.openai && (
+                    <CheckCircle2 className="w-4 h-4 text-brand-500" />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="openai-key"
+                      type={showOpenaiKey ? "text" : "password"}
+                      value={openaiKey}
+                      onChange={(e) => setOpenaiKey(e.target.value)}
+                      placeholder="sk-..."
+                      className="pr-10 bg-input border-border text-foreground placeholder:text-muted-foreground"
+                      data-testid="openai-api-key-input"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground hover:bg-transparent"
+                      onClick={() => setShowOpenaiKey(!showOpenaiKey)}
+                      data-testid="toggle-openai-visibility"
+                    >
+                      {showOpenaiKey ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleTestOpenaiConnection}
+                    disabled={!openaiKey || testingOpenaiConnection}
+                    className="bg-secondary hover:bg-accent text-secondary-foreground border border-border"
+                    data-testid="test-openai-connection"
+                  >
+                    {testingOpenaiConnection ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 mr-2" />
+                        Test
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Used for OpenAI Codex CLI and GPT models.
+                  Get your key at{" "}
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-500 hover:text-brand-400 hover:underline"
+                  >
+                    platform.openai.com
+                  </a>
+                </p>
+                {openaiTestResult && (
+                  <div
+                    className={`flex items-center gap-2 p-3 rounded-lg ${
+                      openaiTestResult.success
+                        ? "bg-green-500/10 border border-green-500/20 text-green-400"
+                        : "bg-red-500/10 border border-red-500/20 text-red-400"
+                    }`}
+                    data-testid="openai-test-connection-result"
+                  >
+                    {openaiTestResult.success ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4" />
+                    )}
+                    <span
+                      className="text-sm"
+                      data-testid="openai-test-connection-message"
+                    >
+                      {openaiTestResult.message}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* Security Notice */}
               <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                 <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5 shrink-0" />
@@ -419,13 +598,13 @@ export function SettingsView() {
 
           {/* Claude CLI Status Section */}
           {claudeCliStatus && (
-            <div className="rounded-xl border border-white/10 bg-zinc-900/50 backdrop-blur-md overflow-hidden">
-              <div className="p-6 border-b border-white/10">
+            <div className="rounded-xl border border-border bg-card backdrop-blur-md overflow-hidden">
+              <div className="p-6 border-b border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Terminal className="w-5 h-5 text-brand-500" />
-                  <h2 className="text-lg font-semibold text-white">Claude Code CLI</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Claude Code CLI</h2>
                 </div>
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-muted-foreground">
                   Claude Code CLI provides better performance for long-running tasks, especially with ultrathink.
                 </p>
               </div>
@@ -452,7 +631,7 @@ export function SettingsView() {
                       </div>
                     </div>
                     {claudeCliStatus.recommendation && (
-                      <p className="text-xs text-zinc-400">{claudeCliStatus.recommendation}</p>
+                      <p className="text-xs text-muted-foreground">{claudeCliStatus.recommendation}</p>
                     )}
                   </div>
                 ) : (
@@ -468,24 +647,123 @@ export function SettingsView() {
                     </div>
                     {claudeCliStatus.installCommands && (
                       <div className="space-y-2">
-                        <p className="text-xs font-medium text-zinc-300">Installation Commands:</p>
+                        <p className="text-xs font-medium text-foreground-secondary">Installation Commands:</p>
                         <div className="space-y-1">
                           {claudeCliStatus.installCommands.npm && (
-                            <div className="p-2 rounded bg-zinc-950/50 border border-white/5">
-                              <p className="text-xs text-zinc-400 mb-1">npm:</p>
-                              <code className="text-xs text-zinc-300 font-mono break-all">{claudeCliStatus.installCommands.npm}</code>
+                            <div className="p-2 rounded bg-background border border-border-glass">
+                              <p className="text-xs text-muted-foreground mb-1">npm:</p>
+                              <code className="text-xs text-foreground-secondary font-mono break-all">{claudeCliStatus.installCommands.npm}</code>
                             </div>
                           )}
                           {claudeCliStatus.installCommands.macos && (
-                            <div className="p-2 rounded bg-zinc-950/50 border border-white/5">
-                              <p className="text-xs text-zinc-400 mb-1">macOS/Linux:</p>
-                              <code className="text-xs text-zinc-300 font-mono break-all">{claudeCliStatus.installCommands.macos}</code>
+                            <div className="p-2 rounded bg-background border border-border-glass">
+                              <p className="text-xs text-muted-foreground mb-1">macOS/Linux:</p>
+                              <code className="text-xs text-foreground-secondary font-mono break-all">{claudeCliStatus.installCommands.macos}</code>
                             </div>
                           )}
                           {claudeCliStatus.installCommands.windows && (
-                            <div className="p-2 rounded bg-zinc-950/50 border border-white/5">
-                              <p className="text-xs text-zinc-400 mb-1">Windows (PowerShell):</p>
-                              <code className="text-xs text-zinc-300 font-mono break-all">{claudeCliStatus.installCommands.windows}</code>
+                            <div className="p-2 rounded bg-background border border-border-glass">
+                              <p className="text-xs text-muted-foreground mb-1">Windows (PowerShell):</p>
+                              <code className="text-xs text-foreground-secondary font-mono break-all">{claudeCliStatus.installCommands.windows}</code>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Codex CLI Status Section */}
+          {codexCliStatus && (
+            <div className="rounded-xl border border-border bg-card backdrop-blur-md overflow-hidden">
+              <div className="p-6 border-b border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Terminal className="w-5 h-5 text-green-500" />
+                  <h2 className="text-lg font-semibold text-foreground">OpenAI Codex CLI</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Codex CLI enables GPT-5.1 Codex models for autonomous coding tasks.
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
+                {codexCliStatus.success && codexCliStatus.status === 'installed' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                      <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-green-400">Codex CLI Installed</p>
+                        <div className="text-xs text-green-400/80 mt-1 space-y-1">
+                          {codexCliStatus.method && (
+                            <p>Method: <span className="font-mono">{codexCliStatus.method}</span></p>
+                          )}
+                          {codexCliStatus.version && (
+                            <p>Version: <span className="font-mono">{codexCliStatus.version}</span></p>
+                          )}
+                          {codexCliStatus.path && (
+                            <p className="truncate" title={codexCliStatus.path}>
+                              Path: <span className="font-mono text-[10px]">{codexCliStatus.path}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {codexCliStatus.recommendation && (
+                      <p className="text-xs text-muted-foreground">{codexCliStatus.recommendation}</p>
+                    )}
+                  </div>
+                ) : codexCliStatus.status === 'api_key_only' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                      <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-400">API Key Detected - CLI Not Installed</p>
+                        <p className="text-xs text-blue-400/80 mt-1">
+                          {codexCliStatus.recommendation || 'OPENAI_API_KEY found but Codex CLI not installed. Install the CLI for full agentic capabilities.'}
+                        </p>
+                      </div>
+                    </div>
+                    {codexCliStatus.installCommands && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-foreground-secondary">Installation Commands:</p>
+                        <div className="space-y-1">
+                          {codexCliStatus.installCommands.npm && (
+                            <div className="p-2 rounded bg-background border border-border-glass">
+                              <p className="text-xs text-muted-foreground mb-1">npm:</p>
+                              <code className="text-xs text-foreground-secondary font-mono break-all">{codexCliStatus.installCommands.npm}</code>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                      <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-yellow-400">Codex CLI Not Detected</p>
+                        <p className="text-xs text-yellow-400/80 mt-1">
+                          {codexCliStatus.recommendation || 'Install OpenAI Codex CLI to use GPT-5.1 Codex models for autonomous coding.'}
+                        </p>
+                      </div>
+                    </div>
+                    {codexCliStatus.installCommands && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-foreground-secondary">Installation Commands:</p>
+                        <div className="space-y-1">
+                          {codexCliStatus.installCommands.npm && (
+                            <div className="p-2 rounded bg-background border border-border-glass">
+                              <p className="text-xs text-muted-foreground mb-1">npm:</p>
+                              <code className="text-xs text-foreground-secondary font-mono break-all">{codexCliStatus.installCommands.npm}</code>
+                            </div>
+                          )}
+                          {codexCliStatus.installCommands.macos && (
+                            <div className="p-2 rounded bg-background border border-border-glass">
+                              <p className="text-xs text-muted-foreground mb-1">macOS (Homebrew):</p>
+                              <code className="text-xs text-foreground-secondary font-mono break-all">{codexCliStatus.installCommands.macos}</code>
                             </div>
                           )}
                         </div>
@@ -664,34 +942,34 @@ export function SettingsView() {
           </div>
 
           {/* Kanban Card Display Section */}
-          <div className="rounded-xl border border-white/10 bg-zinc-900/50 backdrop-blur-md overflow-hidden">
-            <div className="p-6 border-b border-white/10">
+          <div className="rounded-xl border border-border bg-card backdrop-blur-md overflow-hidden">
+            <div className="p-6 border-b border-border">
               <div className="flex items-center gap-2 mb-2">
                 <LayoutGrid className="w-5 h-5 text-brand-500" />
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-foreground">
                   Kanban Card Display
                 </h2>
               </div>
-              <p className="text-sm text-zinc-400">
+              <p className="text-sm text-muted-foreground">
                 Control how much information is displayed on Kanban cards.
               </p>
             </div>
             <div className="p-6 space-y-4">
               <div className="space-y-3">
-                <Label className="text-zinc-300">Detail Level</Label>
+                <Label className="text-foreground-secondary">Detail Level</Label>
                 <div className="grid grid-cols-3 gap-3">
                   <button
                     onClick={() => setKanbanCardDetailLevel("minimal")}
                     className={`flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-lg border transition-all ${
                       kanbanCardDetailLevel === "minimal"
-                        ? "bg-white/5 border-brand-500 text-white"
-                        : "bg-zinc-950/50 border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
+                        ? "bg-accent border-brand-500 text-foreground"
+                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
                     }`}
                     data-testid="kanban-detail-minimal"
                   >
                     <Minimize2 className="w-5 h-5" />
                     <span className="font-medium text-sm">Minimal</span>
-                    <span className="text-xs text-zinc-500 text-center">
+                    <span className="text-xs text-muted-foreground text-center">
                       Title & category only
                     </span>
                   </button>
@@ -699,14 +977,14 @@ export function SettingsView() {
                     onClick={() => setKanbanCardDetailLevel("standard")}
                     className={`flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-lg border transition-all ${
                       kanbanCardDetailLevel === "standard"
-                        ? "bg-white/5 border-brand-500 text-white"
-                        : "bg-zinc-950/50 border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
+                        ? "bg-accent border-brand-500 text-foreground"
+                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
                     }`}
                     data-testid="kanban-detail-standard"
                   >
                     <Square className="w-5 h-5" />
                     <span className="font-medium text-sm">Standard</span>
-                    <span className="text-xs text-zinc-500 text-center">
+                    <span className="text-xs text-muted-foreground text-center">
                       Steps & progress
                     </span>
                   </button>
@@ -714,19 +992,19 @@ export function SettingsView() {
                     onClick={() => setKanbanCardDetailLevel("detailed")}
                     className={`flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-lg border transition-all ${
                       kanbanCardDetailLevel === "detailed"
-                        ? "bg-white/5 border-brand-500 text-white"
-                        : "bg-zinc-950/50 border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
+                        ? "bg-accent border-brand-500 text-foreground"
+                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
                     }`}
                     data-testid="kanban-detail-detailed"
                   >
                     <Maximize2 className="w-5 h-5" />
                     <span className="font-medium text-sm">Detailed</span>
-                    <span className="text-xs text-zinc-500 text-center">
+                    <span className="text-xs text-muted-foreground text-center">
                       Model, tools & tasks
                     </span>
                   </button>
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   <strong>Minimal:</strong> Shows only title and category
                   <br />
                   <strong>Standard:</strong> Adds steps preview and progress bar
@@ -757,7 +1035,7 @@ export function SettingsView() {
             <Button
               variant="secondary"
               onClick={() => setCurrentView("welcome")}
-              className="bg-white/5 hover:bg-white/10 text-white border border-white/10"
+              className="bg-secondary hover:bg-accent text-secondary-foreground border border-border"
               data-testid="back-to-home"
             >
               Back to Home

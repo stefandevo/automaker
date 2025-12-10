@@ -3,10 +3,12 @@ const promptBuilder = require("./prompt-builder");
 const contextManager = require("./context-manager");
 const featureLoader = require("./feature-loader");
 const mcpServerFactory = require("./mcp-server-factory");
+const { ModelRegistry } = require("./model-registry");
+const { ModelProviderFactory } = require("./model-provider");
 
-// Model name mappings
+// Model name mappings for Claude (legacy - kept for backwards compatibility)
 const MODEL_MAP = {
-  haiku: "claude-haiku-4-20250514",
+  haiku: "claude-haiku-4-5",
   sonnet: "claude-sonnet-4-20250514",
   opus: "claude-opus-4-5-20251101",
 };
@@ -23,20 +25,47 @@ const THINKING_BUDGET_MAP = {
 
 /**
  * Feature Executor - Handles feature implementation using Claude Agent SDK
+ * Now supports multiple model providers (Claude, Codex/OpenAI)
  */
 class FeatureExecutor {
   /**
    * Get the model string based on feature's model setting
+   * Supports both Claude and Codex/OpenAI models
    */
   getModelString(feature) {
     const modelKey = feature.model || "opus"; // Default to opus
-    return MODEL_MAP[modelKey] || MODEL_MAP.opus;
+
+    // Use the registry for model lookup
+    const modelString = ModelRegistry.getModelString(modelKey);
+    return modelString || MODEL_MAP[modelKey] || MODEL_MAP.opus;
+  }
+
+  /**
+   * Determine if the feature uses a Codex/OpenAI model
+   */
+  isCodexModel(feature) {
+    const modelKey = feature.model || "opus";
+    return ModelRegistry.isCodexModel(modelKey);
+  }
+
+  /**
+   * Get the appropriate provider for the feature's model
+   */
+  getProvider(feature) {
+    const modelKey = feature.model || "opus";
+    return ModelProviderFactory.getProviderForModel(modelKey);
   }
 
   /**
    * Get thinking configuration based on feature's thinkingLevel
    */
   getThinkingConfig(feature) {
+    const modelId = feature.model || "opus";
+    // Skip thinking config for models that don't support it (e.g., Codex CLI)
+    if (!ModelRegistry.modelSupportsThinking(modelId)) {
+      return null;
+    }
+
     const level = feature.thinkingLevel || "none";
     const budgetTokens = THINKING_BUDGET_MAP[level];
 
@@ -109,6 +138,11 @@ class FeatureExecutor {
   async implementFeature(feature, projectPath, sendToRenderer, execution) {
     console.log(`[FeatureExecutor] Implementing: ${feature.description}`);
 
+    // Declare variables outside try block so they're available in catch
+    let modelString;
+    let providerName;
+    let isCodex;
+
     try {
       // ========================================
       // PHASE 1: PLANNING
@@ -161,7 +195,14 @@ class FeatureExecutor {
         });
       }
 
-      console.log(`[FeatureExecutor] Using model: ${modelString}, thinking: ${feature.thinkingLevel || 'none'}`);
+      providerName = this.isCodexModel(feature) ? 'Codex/OpenAI' : 'Claude';
+      console.log(`[FeatureExecutor] Using provider: ${providerName}, model: ${modelString}, thinking: ${feature.thinkingLevel || 'none'}`);
+
+      // Note: Claude Agent SDK handles authentication automatically - it can use:
+      // 1. CLAUDE_CODE_OAUTH_TOKEN env var (for SDK mode)
+      // 2. Claude CLI's own authentication (if CLI is installed)
+      // 3. ANTHROPIC_API_KEY (fallback)
+      // We don't need to validate here - let the SDK/CLI handle auth errors
 
       // Configure options for the SDK query
       const options = {
@@ -224,8 +265,31 @@ class FeatureExecutor {
       });
       console.log(`[FeatureExecutor] Phase: ACTION for ${feature.description}`);
 
-      // Send query
-      const currentQuery = query({ prompt, options });
+      // Send query - use appropriate provider based on model
+      let currentQuery;
+      isCodex = this.isCodexModel(feature);
+
+      if (isCodex) {
+        // Use Codex provider for OpenAI models
+        console.log(`[FeatureExecutor] Using Codex provider for model: ${modelString}`);
+        const provider = this.getProvider(feature);
+        currentQuery = provider.executeQuery({
+          prompt,
+          model: modelString,
+          cwd: projectPath,
+          systemPrompt: promptBuilder.getCodingPrompt(),
+          maxTurns: 20, // Codex CLI typically uses fewer turns
+          allowedTools: options.allowedTools,
+          abortController: abortController,
+          env: {
+            OPENAI_API_KEY: process.env.OPENAI_API_KEY
+          }
+        });
+      } else {
+        // Use Claude SDK (original implementation)
+        currentQuery = query({ prompt, options });
+      }
+
       execution.query = currentQuery;
 
       // Stream responses
@@ -234,6 +298,18 @@ class FeatureExecutor {
       for await (const msg of currentQuery) {
         // Check if this specific feature was aborted
         if (!execution.isActive()) break;
+
+        // Handle error messages
+        if (msg.type === "error") {
+          const errorMsg = `\n❌ Error: ${msg.error}\n`;
+          await contextManager.writeToContextFile(projectPath, feature.id, errorMsg);
+          sendToRenderer({
+            type: "auto_mode_error",
+            featureId: feature.id,
+            error: msg.error,
+          });
+          throw new Error(msg.error);
+        }
 
         if (msg.type === "assistant" && msg.message?.content) {
           for (const block of msg.message.content) {
@@ -248,6 +324,15 @@ class FeatureExecutor {
                 type: "auto_mode_progress",
                 featureId: feature.id,
                 content: block.text,
+              });
+            } else if (block.type === "thinking") {
+              // Handle thinking output from Codex O-series models
+              const thinkingMsg = `\n💭 Thinking: ${block.thinking?.substring(0, 200)}...\n`;
+              await contextManager.writeToContextFile(projectPath, feature.id, thinkingMsg);
+              sendToRenderer({
+                type: "auto_mode_progress",
+                featureId: feature.id,
+                content: thinkingMsg,
               });
             } else if (block.type === "tool_use") {
               // First tool use indicates we're actively implementing
@@ -341,6 +426,45 @@ class FeatureExecutor {
       }
 
       console.error("[FeatureExecutor] Error implementing feature:", error);
+      
+      // Safely get model info for error logging (may not be set if error occurred early)
+      const modelInfo = modelString ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+        model: modelString,
+        provider: providerName || 'unknown',
+        isCodex: isCodex !== undefined ? isCodex : 'unknown'
+      } : {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+        model: 'not initialized',
+        provider: 'unknown',
+        isCodex: 'unknown'
+      };
+      
+      console.error("[FeatureExecutor] Error details:", modelInfo);
+
+      // Check if this is a Claude CLI process error
+      if (error.message && error.message.includes("process exited with code")) {
+        const modelDisplay = modelString ? `Model: ${modelString}` : 'Model: not initialized';
+        const errorMsg = `Claude Code CLI failed with exit code 1. This might be due to:\n` +
+          `- Invalid or unsupported model (${modelDisplay})\n` +
+          `- Missing or invalid CLAUDE_CODE_OAUTH_TOKEN\n` +
+          `- Claude CLI configuration issue\n` +
+          `- Model not available in your Claude account\n\n` +
+          `Original error: ${error.message}`;
+        
+        await contextManager.writeToContextFile(projectPath, feature.id, `\n❌ ${errorMsg}\n`);
+        sendToRenderer({
+          type: "auto_mode_error",
+          featureId: feature.id,
+          error: errorMsg,
+        });
+      }
 
       // Clean up
       if (execution) {

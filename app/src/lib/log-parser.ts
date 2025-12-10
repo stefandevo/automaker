@@ -29,7 +29,27 @@ export interface LogEntry {
   };
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 9);
+/**
+ * Generates a deterministic ID based on content and position
+ * This ensures the same log entry always gets the same ID,
+ * preserving expanded/collapsed state when new logs stream in
+ *
+ * Uses only the first 200 characters of content to ensure stability
+ * even when entries are merged (which appends content at the end)
+ */
+const generateDeterministicId = (content: string, lineIndex: number): string => {
+  // Use first 200 chars to ensure stability when entries are merged
+  const stableContent = content.slice(0, 200);
+  // Simple hash function for the content
+  let hash = 0;
+  const str = stableContent + '|' + lineIndex.toString();
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return 'log_' + Math.abs(hash).toString(36);
+};
 
 /**
  * Detects the type of log entry based on content patterns
@@ -165,24 +185,32 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
   const entries: LogEntry[] = [];
   const lines = rawOutput.split("\n");
 
-  let currentEntry: LogEntry | null = null;
+  let currentEntry: Omit<LogEntry, 'id'> & { id?: string } | null = null;
   let currentContent: string[] = [];
+  let entryStartLine = 0; // Track the starting line for deterministic ID generation
 
   const finalizeEntry = () => {
     if (currentEntry && currentContent.length > 0) {
       currentEntry.content = currentContent.join("\n").trim();
       if (currentEntry.content) {
-        entries.push(currentEntry);
+        // Generate deterministic ID based on content and position
+        const entryWithId: LogEntry = {
+          ...currentEntry as Omit<LogEntry, 'id'>,
+          id: generateDeterministicId(currentEntry.content, entryStartLine),
+        };
+        entries.push(entryWithId);
       }
     }
     currentContent = [];
   };
 
+  let lineIndex = 0;
   for (const line of lines) {
     const trimmedLine = line.trim();
 
     // Skip empty lines at the beginning
     if (!trimmedLine && !currentEntry) {
+      lineIndex++;
       continue;
     }
 
@@ -204,9 +232,11 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       // Finalize previous entry
       finalizeEntry();
 
-      // Start new entry
+      // Track starting line for deterministic ID
+      entryStartLine = lineIndex;
+
+      // Start new entry (ID will be generated when finalizing)
       currentEntry = {
-        id: generateId(),
         type: lineType,
         title: generateTitle(lineType, trimmedLine),
         content: "",
@@ -220,15 +250,18 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       // Continue current entry
       currentContent.push(line);
     } else {
+      // Track starting line for deterministic ID
+      entryStartLine = lineIndex;
+
       // No current entry, create a default info entry
       currentEntry = {
-        id: generateId(),
         type: "info",
         title: "Info",
         content: "",
       };
       currentContent.push(line);
     }
+    lineIndex++;
   }
 
   // Finalize last entry
@@ -248,6 +281,7 @@ function mergeConsecutiveEntries(entries: LogEntry[]): LogEntry[] {
 
   const merged: LogEntry[] = [];
   let current: LogEntry | null = null;
+  let mergeIndex = 0;
 
   for (const entry of entries) {
     if (
@@ -255,13 +289,15 @@ function mergeConsecutiveEntries(entries: LogEntry[]): LogEntry[] {
       (current.type === "debug" || current.type === "info") &&
       current.type === entry.type
     ) {
-      // Merge into current
+      // Merge into current - regenerate ID based on merged content
       current.content += "\n\n" + entry.content;
+      current.id = generateDeterministicId(current.content, mergeIndex);
     } else {
       if (current) {
         merged.push(current);
       }
       current = { ...entry };
+      mergeIndex = merged.length;
     }
   }
 

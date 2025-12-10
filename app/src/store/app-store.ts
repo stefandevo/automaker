@@ -32,6 +32,7 @@ export type KanbanCardDetailLevel = "minimal" | "standard" | "detailed";
 export interface ApiKeys {
   anthropic: string;
   google: string;
+  openai: string;
 }
 
 export interface ImageAttachment {
@@ -76,7 +77,22 @@ export interface FeatureImagePath {
 }
 
 // Available models for feature execution
-export type AgentModel = "opus" | "sonnet" | "haiku";
+// Claude models
+export type ClaudeModel = "opus" | "sonnet" | "haiku";
+// OpenAI/Codex models
+export type OpenAIModel =
+  | "gpt-5.1-codex-max"
+  | "gpt-5.1-codex"
+  | "gpt-5.1-codex-mini"
+  | "gpt-5.1"
+  | "o3"
+  | "o3-mini"
+  | "o4-mini";
+// Combined model type
+export type AgentModel = ClaudeModel | OpenAIModel;
+
+// Model provider type
+export type ModelProvider = "claude" | "codex";
 
 // Thinking level (budget_tokens) options
 export type ThinkingLevel = "none" | "low" | "medium" | "high" | "ultrathink";
@@ -226,6 +242,7 @@ const initialState: AppState = {
   apiKeys: {
     anthropic: "",
     google: "",
+    openai: "",
   },
   chatSessions: [],
   currentChatSession: null,

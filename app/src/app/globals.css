@@ -1362,6 +1362,39 @@
     box-shadow: 0 0 8px #f97e72;
 }
 
+/* Line clamp utilities for text overflow prevention */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Kanban card improvements to prevent text overflow */
+.kanban-card-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Ensure proper column layout in double-width kanban columns */
+.kanban-columns-layout > * {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Electron title bar drag region */
 .titlebar-drag-region {
   -webkit-app-region: drag;

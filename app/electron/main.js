@@ -569,3 +569,82 @@ ipcMain.handle("claude:check-cli", async () => {
     return { success: false, error: error.message };
   }
 });
+
+// ============================================================================
+// Codex CLI Detection IPC Handlers
+// ============================================================================
+
+/**
+ * Check Codex CLI installation status
+ */
+ipcMain.handle("codex:check-cli", async () => {
+  try {
+    const codexCliDetector = require("./services/codex-cli-detector");
+    const info = codexCliDetector.getInstallationInfo();
+    return { success: true, ...info };
+  } catch (error) {
+    console.error("[IPC] codex:check-cli error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get all available models from all providers
+ */
+ipcMain.handle("model:get-available", async () => {
+  try {
+    const { ModelProviderFactory } = require("./services/model-provider");
+    const models = ModelProviderFactory.getAllModels();
+    return { success: true, models };
+  } catch (error) {
+    console.error("[IPC] model:get-available error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Check all provider installation status
+ */
+ipcMain.handle("model:check-providers", async () => {
+  try {
+    const { ModelProviderFactory } = require("./services/model-provider");
+    const status = await ModelProviderFactory.checkAllProviders();
+    return { success: true, providers: status };
+  } catch (error) {
+    console.error("[IPC] model:check-providers error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Test OpenAI API connection
+ */
+ipcMain.handle("openai:test-connection", async (_, { apiKey }) => {
+  try {
+    // Simple test using fetch to OpenAI API
+    const response = await fetch("https://api.openai.com/v1/models", {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${apiKey || process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        success: true,
+        message: `Connected successfully. Found ${data.data?.length || 0} models.`
+      };
+    } else {
+      const error = await response.json();
+      return {
+        success: false,
+        error: error.error?.message || "Failed to connect to OpenAI API"
+      };
+    }
+  } catch (error) {
+    console.error("[IPC] openai:test-connection error:", error);
+    return { success: false, error: error.message };
+  }
+});

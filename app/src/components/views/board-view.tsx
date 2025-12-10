@@ -25,7 +25,7 @@ import {
   ThinkingLevel,
 } from "@/store/app-store";
 import { getElectronAPI } from "@/lib/electron";
-import { cn } from "@/lib/utils";
+import { cn, modelSupportsThinking } from "@/lib/utils";
 import {
   Card,
   CardDescription,
@@ -90,6 +90,76 @@ const COLUMNS: { id: ColumnId; title: string; color: string }[] = [
   { id: "in_progress", title: "In Progress", color: "bg-yellow-500" },
   { id: "waiting_approval", title: "Waiting Approval", color: "bg-orange-500" },
   { id: "verified", title: "Verified", color: "bg-green-500" },
+];
+
+type ModelOption = {
+  id: AgentModel;
+  label: string;
+  description: string;
+  badge?: string;
+  provider: "claude" | "codex";
+};
+
+const CLAUDE_MODELS: ModelOption[] = [
+  {
+    id: "haiku",
+    label: "Claude Haiku",
+    description: "Fast and efficient for simple tasks.",
+    badge: "Speed",
+    provider: "claude",
+  },
+  {
+    id: "sonnet",
+    label: "Claude Sonnet",
+    description: "Balanced performance with strong reasoning.",
+    badge: "Balanced",
+    provider: "claude",
+  },
+  {
+    id: "opus",
+    label: "Claude Opus",
+    description: "Most capable model for complex work.",
+    badge: "Premium",
+    provider: "claude",
+  },
+];
+
+const CODEX_MODELS: ModelOption[] = [
+  {
+    id: "gpt-5.1-codex-max",
+    label: "GPT-5.1 Codex Max",
+    description: "Flagship Codex model tuned for deep coding tasks.",
+    badge: "Flagship",
+    provider: "codex",
+  },
+  {
+    id: "gpt-5.1-codex",
+    label: "GPT-5.1 Codex",
+    description: "Strong coding performance with lower cost.",
+    badge: "Standard",
+    provider: "codex",
+  },
+  {
+    id: "gpt-5.1-codex-mini",
+    label: "GPT-5.1 Codex Mini",
+    description: "Fastest Codex option for lightweight edits.",
+    badge: "Fast",
+    provider: "codex",
+  },
+  {
+    id: "gpt-5.1",
+    label: "GPT-5.1",
+    description: "General-purpose reasoning with solid coding ability.",
+    badge: "General",
+    provider: "codex",
+  },
+  {
+    id: "o3",
+    label: "OpenAI O3",
+    description: "Reasoning-focused model for tricky problems.",
+    badge: "Reasoning",
+    provider: "codex",
+  },
 ];
 
 export function BoardView() {
@@ -597,6 +667,10 @@ export function BoardView() {
 
   const handleAddFeature = () => {
     const category = newFeature.category || "Uncategorized";
+    const selectedModel = newFeature.model;
+    const normalizedThinking = modelSupportsThinking(selectedModel)
+      ? newFeature.thinkingLevel
+      : "none";
     addFeature({
       category,
       description: newFeature.description,
@@ -605,8 +679,8 @@ export function BoardView() {
       images: newFeature.images,
       imagePaths: newFeature.imagePaths,
       skipTests: newFeature.skipTests,
-      model: newFeature.model,
-      thinkingLevel: newFeature.thinkingLevel,
+      model: selectedModel,
+      thinkingLevel: normalizedThinking,
     });
     // Persist the category
     saveCategory(category);
@@ -626,13 +700,18 @@ export function BoardView() {
   const handleUpdateFeature = () => {
     if (!editingFeature) return;
 
+    const selectedModel = (editingFeature.model ?? "opus") as AgentModel;
+    const normalizedThinking = modelSupportsThinking(selectedModel)
+      ? editingFeature.thinkingLevel
+      : "none";
+
     updateFeature(editingFeature.id, {
       category: editingFeature.category,
       description: editingFeature.description,
       steps: editingFeature.steps,
       skipTests: editingFeature.skipTests,
-      model: editingFeature.model,
-      thinkingLevel: editingFeature.thinkingLevel,
+      model: selectedModel,
+      thinkingLevel: normalizedThinking,
     });
     // Persist the category if it's new
     if (editingFeature.category) {
@@ -1096,6 +1175,64 @@ export function BoardView() {
     startNextFeaturesRef.current = handleStartNextFeatures;
   }, [handleStartNextFeatures]);
 
+  const renderModelOptions = (
+    options: ModelOption[],
+    selectedModel: AgentModel,
+    onSelect: (model: AgentModel) => void,
+    testIdPrefix = "model-select"
+  ) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {options.map((option) => {
+        const isSelected = selectedModel === option.id;
+        const isCodex = option.provider === "codex";
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onSelect(option.id)}
+            className={cn(
+              "w-full rounded-lg border p-3 text-left transition-all",
+              "hover:-translate-y-[1px] hover:shadow-sm",
+              isSelected
+                ? isCodex
+                  ? "border-emerald-500 bg-emerald-600 text-white shadow-sm"
+                  : "border-primary bg-primary text-primary-foreground shadow-sm"
+                : "border-input bg-background hover:border-primary/40"
+            )}
+            data-testid={`${testIdPrefix}-${option.id}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold text-sm">{option.label}</span>
+              {option.badge && (
+                <span
+                  className={cn(
+                    "text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full border",
+                    isSelected
+                      ? "border-primary-foreground/60 bg-primary-foreground/15 text-primary-foreground"
+                      : isCodex
+                        ? "border-emerald-500/60 text-emerald-700 dark:text-emerald-200"
+                        : "border-primary/50 text-primary"
+                  )}
+                >
+                  {option.badge}
+                </span>
+              )}
+            </div>
+            <p className={cn(
+              "text-xs leading-snug mt-1",
+              isSelected ? "text-primary-foreground/90" : "text-muted-foreground"
+            )}>
+              {option.description}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const newModelAllowsThinking = modelSupportsThinking(newFeature.model);
+  const editModelAllowsThinking = modelSupportsThinking(editingFeature?.model);
+
   if (!currentProject) {
     return (
       <div
@@ -1207,7 +1344,7 @@ export function BoardView() {
             <Plus className="w-4 h-4 mr-2" />
             Add Feature
             <span
-              className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/10 border border-white/20"
+              className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-accent border border-border-glass"
               data-testid="shortcut-add-feature"
             >
               {ACTION_SHORTCUTS.addFeature}
@@ -1265,7 +1402,7 @@ export function BoardView() {
                         >
                           <FastForward className="w-3 h-3 mr-1" />
                           Start Next
-                          <span className="ml-1 px-1 py-0.5 text-[9px] font-mono rounded bg-white/10 border border-white/20">
+                          <span className="ml-1 px-1 py-0.5 text-[9px] font-mono rounded bg-accent border border-border-glass">
                             {ACTION_SHORTCUTS.startNext}
                           </span>
                         </Button>
@@ -1438,37 +1575,66 @@ export function BoardView() {
             </p>
 
             {/* Model Selection */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-muted-foreground" />
                 Model
               </Label>
-              <div className="flex gap-2">
-                {(["haiku", "sonnet", "opus"] as AgentModel[]).map((model) => (
-                  <button
-                    key={model}
-                    type="button"
-                    onClick={() => setNewFeature({ ...newFeature, model })}
-                    className={cn(
-                      "flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors",
-                      newFeature.model === model
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background hover:bg-accent border-input"
-                    )}
-                    data-testid={`model-select-${model}`}
-                  >
-                    {model === "haiku" && "Haiku"}
-                    {model === "sonnet" && "Sonnet"}
-                    {model === "opus" && "Opus"}
-                  </button>
-                ))}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground font-medium">Claude (SDK)</p>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-primary/40 text-primary">
+                    Native
+                  </span>
+                </div>
+                {renderModelOptions(
+                  CLAUDE_MODELS,
+                  newFeature.model,
+                  (model) =>
+                    setNewFeature({
+                      ...newFeature,
+                      model,
+                      thinkingLevel: modelSupportsThinking(model)
+                        ? newFeature.thinkingLevel
+                        : "none",
+                    })
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    OpenAI via Codex CLI
+                  </p>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/50 text-emerald-600 dark:text-emerald-300">
+                    CLI
+                  </span>
+                </div>
+                {renderModelOptions(
+                  CODEX_MODELS,
+                  newFeature.model,
+                  (model) =>
+                    setNewFeature({
+                      ...newFeature,
+                      model,
+                      thinkingLevel: modelSupportsThinking(model)
+                        ? newFeature.thinkingLevel
+                        : "none",
+                    })
+                )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Haiku for simple tasks, Sonnet for balanced, Opus for complex tasks.
+                Claude models use the Claude SDK. OpenAI models run through the Codex CLI.
+                {!newModelAllowsThinking && (
+                  <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                    Thinking controls are hidden for Codex CLI models.
+                  </span>
+                )}
               </p>
             </div>
 
-            {/* Thinking Level */}
+            {/* Thinking Level - Hidden for Codex models */}
+            {newModelAllowsThinking && (
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <Brain className="w-4 h-4 text-muted-foreground" />
@@ -1508,6 +1674,7 @@ export function BoardView() {
                 Higher thinking levels give the model more time to reason through complex problems.
               </p>
             </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowAddDialog(false)}>
@@ -1520,7 +1687,7 @@ export function BoardView() {
             >
               Add Feature
               <span
-                className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/10 border border-white/20"
+                className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-primary-foreground/10 border border-primary-foreground/20"
                 data-testid="shortcut-confirm-add-feature"
               >
                 ⌘↵
@@ -1628,37 +1795,68 @@ export function BoardView() {
               </p>
 
               {/* Model Selection */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-muted-foreground" />
                   Model
                 </Label>
-                <div className="flex gap-2">
-                  {(["haiku", "sonnet", "opus"] as AgentModel[]).map((model) => (
-                    <button
-                      key={model}
-                      type="button"
-                      onClick={() => setEditingFeature({ ...editingFeature, model })}
-                      className={cn(
-                        "flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors",
-                        (editingFeature.model ?? "opus") === model
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background hover:bg-accent border-input"
-                      )}
-                      data-testid={`edit-model-select-${model}`}
-                    >
-                      {model === "haiku" && "Haiku"}
-                      {model === "sonnet" && "Sonnet"}
-                      {model === "opus" && "Opus"}
-                    </button>
-                  ))}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground font-medium">Claude (SDK)</p>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-primary/40 text-primary">
+                      Native
+                    </span>
+                  </div>
+                  {renderModelOptions(
+                    CLAUDE_MODELS,
+                    (editingFeature.model ?? "opus") as AgentModel,
+                    (model) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        model,
+                        thinkingLevel: modelSupportsThinking(model)
+                          ? editingFeature.thinkingLevel
+                          : "none",
+                      }),
+                    "edit-model-select"
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      OpenAI via Codex CLI
+                    </p>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/50 text-emerald-600 dark:text-emerald-300">
+                      CLI
+                    </span>
+                  </div>
+                  {renderModelOptions(
+                    CODEX_MODELS,
+                    (editingFeature.model ?? "opus") as AgentModel,
+                    (model) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        model,
+                        thinkingLevel: modelSupportsThinking(model)
+                          ? editingFeature.thinkingLevel
+                          : "none",
+                      }),
+                    "edit-model-select"
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Haiku for simple tasks, Sonnet for balanced, Opus for complex tasks.
+                  Claude models use the Claude SDK. OpenAI models run through the Codex CLI.
+                  {!editModelAllowsThinking && (
+                    <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                      Thinking controls are hidden for Codex CLI models.
+                    </span>
+                  )}
                 </p>
               </div>
 
-              {/* Thinking Level */}
+              {/* Thinking Level - Hidden for Codex models */}
+              {editModelAllowsThinking && (
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Brain className="w-4 h-4 text-muted-foreground" />
@@ -1698,6 +1896,7 @@ export function BoardView() {
                   Higher thinking levels give the model more time to reason through complex problems.
                 </p>
               </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -1860,7 +2059,7 @@ export function BoardView() {
             >
               <MessageSquare className="w-4 h-4 mr-2" />
               Send Follow-Up
-              <span className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/10 border border-white/20">
+              <span className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-primary-foreground/10 border border-primary-foreground/20">
                 ⌘↵
               </span>
             </Button>
