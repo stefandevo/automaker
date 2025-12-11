@@ -8,7 +8,6 @@ import {
   Palette,
   Terminal,
   Atom,
-  LayoutGrid,
   FlaskConical,
   Trash2,
   Settings2,
@@ -27,7 +26,6 @@ import { ApiKeysSection } from "./settings-view/api-keys/api-keys-section";
 import { ClaudeCliStatus } from "./settings-view/cli-status/claude-cli-status";
 import { CodexCliStatus } from "./settings-view/cli-status/codex-cli-status";
 import { AppearanceSection } from "./settings-view/appearance/appearance-section";
-import { KanbanDisplaySection } from "./settings-view/kanban-display/kanban-display-section";
 import { KeyboardShortcutsSection } from "./settings-view/keyboard-shortcuts/keyboard-shortcuts-section";
 import { FeatureDefaultsSection } from "./settings-view/feature-defaults/feature-defaults-section";
 import { DangerZoneSection } from "./settings-view/danger-zone/danger-zone-section";
@@ -43,7 +41,6 @@ const NAV_ITEMS = [
   { id: "claude", label: "Claude", icon: Terminal },
   { id: "codex", label: "Codex", icon: Atom },
   { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "kanban", label: "Kanban Display", icon: LayoutGrid },
   { id: "audio", label: "Audio", icon: Volume2 },
   { id: "keyboard", label: "Keyboard Shortcuts", icon: Settings2 },
   { id: "defaults", label: "Feature Defaults", icon: FlaskConical },
@@ -55,8 +52,6 @@ export function SettingsView() {
     theme,
     setTheme,
     setProjectTheme,
-    kanbanCardDetailLevel,
-    setKanbanCardDetailLevel,
     defaultSkipTests,
     setDefaultSkipTests,
     useWorktrees,
@@ -166,11 +161,6 @@ export function SettingsView() {
               onThemeChange={handleSetTheme}
             />
 
-            {/* Kanban Card Display Section */}
-            <KanbanDisplaySection
-              detailLevel={kanbanCardDetailLevel}
-              onChange={setKanbanCardDetailLevel}
-            />
 
             {/* Keyboard Shortcuts Section */}
             <KeyboardShortcutsSection
