@@ -78,6 +78,7 @@
   "build": {
     "appId": "com.automaker.app",
     "productName": "Automaker",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -145,7 +146,8 @@
       ],
       "category": "Development",
       "icon": "public/logo_larger.png",
-      "maintainer": "webdevcody@gmail.com"
+      "maintainer": "webdevcody@gmail.com",
+      "executableName": "automaker"
     },
     "nsis": {
       "oneClick": false,
