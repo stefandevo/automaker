@@ -210,6 +210,7 @@ export function Sidebar() {
     cycleNextProject,
     clearProjectHistory,
     setProjectTheme,
+    setTheme,
     theme: globalTheme,
   } = useAppStore();
 
@@ -430,12 +431,16 @@ export function Sidebar() {
           );
           useAppStore.setState({ projects: updatedProjects });
         } else {
-          // Create new project
+          // Create new project - check for trashed project with same path first (preserves theme if deleted/recreated)
+          // Then fall back to current effective theme, then global theme
+          const trashedProject = trashedProjects.find((p) => p.path === path);
+          const effectiveTheme = trashedProject?.theme || currentProject?.theme || globalTheme;
           project = {
             id: `project-${Date.now()}`,
             name,
             path,
             lastOpened: new Date().toISOString(),
+            theme: effectiveTheme,
           };
           addProject(project);
         }
@@ -474,7 +479,7 @@ export function Sidebar() {
         });
       }
     }
-  }, [projects, addProject, setCurrentProject]);
+  }, [projects, trashedProjects, addProject, setCurrentProject, currentProject, globalTheme]);
 
   const handleRestoreProject = useCallback(
     (projectId: string) => {
@@ -963,6 +968,10 @@ export function Sidebar() {
                         value={currentProject.theme || ""}
                         onValueChange={(value) => {
                           if (currentProject) {
+                            // If selecting an actual theme (not "Use Global"), also update global
+                            if (value !== "") {
+                              setTheme(value as any);
+                            }
                             setProjectTheme(
                               currentProject.id,
                               value === "" ? null : (value as any)

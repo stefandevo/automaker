@@ -636,6 +636,7 @@ export const useAppStore = create<AppState & AppActions>()(
           name: trashed.name,
           path: trashed.path,
           lastOpened: new Date().toISOString(),
+          theme: trashed.theme, // Preserve theme from trashed project
         };
 
         set({
