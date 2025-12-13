@@ -34,6 +34,18 @@ function isInputFocused(): boolean {
     return true;
   }
 
+  // Check if focus is inside an xterm terminal (they use a hidden textarea)
+  const xtermContainer = activeElement.closest(".xterm");
+  if (xtermContainer) {
+    return true;
+  }
+
+  // Also check if any parent has data-terminal-container attribute
+  const terminalContainer = activeElement.closest("[data-terminal-container]");
+  if (terminalContainer) {
+    return true;
+  }
+
   // Check for autocomplete/typeahead dropdowns being open
   const autocompleteList = document.querySelector(
     '[data-testid="category-autocomplete-list"]'

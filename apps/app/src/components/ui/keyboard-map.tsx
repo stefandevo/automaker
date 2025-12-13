@@ -90,6 +90,7 @@ const SHORTCUT_LABELS: Record<keyof KeyboardShortcuts, string> = {
   context: "Context",
   settings: "Settings",
   profiles: "AI Profiles",
+  terminal: "Terminal",
   toggleSidebar: "Toggle Sidebar",
   addFeature: "Add Feature",
   addContextFile: "Add Context File",
@@ -100,6 +101,9 @@ const SHORTCUT_LABELS: Record<keyof KeyboardShortcuts, string> = {
   cyclePrevProject: "Prev Project",
   cycleNextProject: "Next Project",
   addProfile: "Add Profile",
+  splitTerminalRight: "Split Right",
+  splitTerminalDown: "Split Down",
+  closeTerminal: "Close Terminal",
 };
 
 // Categorize shortcuts for color coding
@@ -110,6 +114,7 @@ const SHORTCUT_CATEGORIES: Record<keyof KeyboardShortcuts, "navigation" | "ui" |
   context: "navigation",
   settings: "navigation",
   profiles: "navigation",
+  terminal: "navigation",
   toggleSidebar: "ui",
   addFeature: "action",
   addContextFile: "action",
@@ -120,6 +125,9 @@ const SHORTCUT_CATEGORIES: Record<keyof KeyboardShortcuts, "navigation" | "ui" |
   cyclePrevProject: "action",
   cycleNextProject: "action",
   addProfile: "action",
+  splitTerminalRight: "action",
+  splitTerminalDown: "action",
+  closeTerminal: "action",
 };
 
 // Category colors

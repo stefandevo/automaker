@@ -609,6 +609,12 @@ export function Sidebar() {
           icon: UserCircle,
           shortcut: shortcuts.profiles,
         },
+        {
+          id: "terminal",
+          label: "Terminal",
+          icon: Terminal,
+          shortcut: shortcuts.terminal,
+        },
       ],
     },
   ];

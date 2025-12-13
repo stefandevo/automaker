@@ -12,6 +12,7 @@ import { ContextView } from "@/components/views/context-view";
 import { ProfilesView } from "@/components/views/profiles-view";
 import { SetupView } from "@/components/views/setup-view";
 import { RunningAgentsView } from "@/components/views/running-agents-view";
+import { TerminalView } from "@/components/views/terminal-view";
 import { useAppStore } from "@/store/app-store";
 import { useSetupStore } from "@/store/setup-store";
 import { getElectronAPI, isElectron } from "@/lib/electron";
@@ -206,6 +207,8 @@ function HomeContent() {
         return <ProfilesView />;
       case "running-agents":
         return <RunningAgentsView />;
+      case "terminal":
+        return <TerminalView />;
       default:
         return <WelcomeView />;
     }

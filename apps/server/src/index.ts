@@ -30,9 +30,11 @@ import { createSpecRegenerationRoutes } from "./routes/spec-regeneration.js";
 import { createRunningAgentsRoutes } from "./routes/running-agents.js";
 import { createWorkspaceRoutes } from "./routes/workspace.js";
 import { createTemplatesRoutes } from "./routes/templates.js";
+import { createTerminalRoutes, validateTerminalToken, isTerminalEnabled, isTerminalPasswordRequired } from "./routes/terminal.js";
 import { AgentService } from "./services/agent-service.js";
 import { FeatureLoader } from "./services/feature-loader.js";
 import { AutoModeService } from "./services/auto-mode-service.js";
+import { getTerminalService } from "./services/terminal-service.js";
 
 // Load environment variables
 dotenv.config();
@@ -116,13 +118,34 @@ app.use("/api/spec-regeneration", createSpecRegenerationRoutes(events));
 app.use("/api/running-agents", createRunningAgentsRoutes(autoModeService));
 app.use("/api/workspace", createWorkspaceRoutes());
 app.use("/api/templates", createTemplatesRoutes());
+app.use("/api/terminal", createTerminalRoutes());
 
 // Create HTTP server
 const server = createServer(app);
 
-// WebSocket server for streaming events
-const wss = new WebSocketServer({ server, path: "/api/events" });
+// WebSocket servers using noServer mode for proper multi-path support
+const wss = new WebSocketServer({ noServer: true });
+const terminalWss = new WebSocketServer({ noServer: true });
+const terminalService = getTerminalService();
 
+// Handle HTTP upgrade requests manually to route to correct WebSocket server
+server.on("upgrade", (request, socket, head) => {
+  const { pathname } = new URL(request.url || "", `http://${request.headers.host}`);
+
+  if (pathname === "/api/events") {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  } else if (pathname === "/api/terminal/ws") {
+    terminalWss.handleUpgrade(request, socket, head, (ws) => {
+      terminalWss.emit("connection", ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+// Events WebSocket connection handler
 wss.on("connection", (ws: WebSocket) => {
   console.log("[WebSocket] Client connected");
 
@@ -144,15 +167,153 @@ wss.on("connection", (ws: WebSocket) => {
   });
 });
 
+// Track WebSocket connections per session
+const terminalConnections: Map<string, Set<WebSocket>> = new Map();
+
+// Terminal WebSocket connection handler
+terminalWss.on("connection", (ws: WebSocket, req: import("http").IncomingMessage) => {
+  // Parse URL to get session ID and token
+  const url = new URL(req.url || "", `http://${req.headers.host}`);
+  const sessionId = url.searchParams.get("sessionId");
+  const token = url.searchParams.get("token");
+
+  console.log(`[Terminal WS] Connection attempt for session: ${sessionId}`);
+
+  // Check if terminal is enabled
+  if (!isTerminalEnabled()) {
+    console.log("[Terminal WS] Terminal is disabled");
+    ws.close(4003, "Terminal access is disabled");
+    return;
+  }
+
+  // Validate token if password is required
+  if (isTerminalPasswordRequired() && !validateTerminalToken(token || undefined)) {
+    console.log("[Terminal WS] Invalid or missing token");
+    ws.close(4001, "Authentication required");
+    return;
+  }
+
+  if (!sessionId) {
+    console.log("[Terminal WS] No session ID provided");
+    ws.close(4002, "Session ID required");
+    return;
+  }
+
+  // Check if session exists
+  const session = terminalService.getSession(sessionId);
+  if (!session) {
+    console.log(`[Terminal WS] Session ${sessionId} not found`);
+    ws.close(4004, "Session not found");
+    return;
+  }
+
+  console.log(`[Terminal WS] Client connected to session ${sessionId}`);
+
+  // Track this connection
+  if (!terminalConnections.has(sessionId)) {
+    terminalConnections.set(sessionId, new Set());
+  }
+  terminalConnections.get(sessionId)!.add(ws);
+
+  // Subscribe to terminal data
+  const unsubscribeData = terminalService.onData((sid, data) => {
+    if (sid === sessionId && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "data", data }));
+    }
+  });
+
+  // Subscribe to terminal exit
+  const unsubscribeExit = terminalService.onExit((sid, exitCode) => {
+    if (sid === sessionId && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "exit", exitCode }));
+      ws.close(1000, "Session ended");
+    }
+  });
+
+  // Handle incoming messages
+  ws.on("message", (message) => {
+    try {
+      const msg = JSON.parse(message.toString());
+
+      switch (msg.type) {
+        case "input":
+          // Write user input to terminal
+          terminalService.write(sessionId, msg.data);
+          break;
+
+        case "resize":
+          // Resize terminal
+          if (msg.cols && msg.rows) {
+            terminalService.resize(sessionId, msg.cols, msg.rows);
+          }
+          break;
+
+        case "ping":
+          // Respond to ping
+          ws.send(JSON.stringify({ type: "pong" }));
+          break;
+
+        default:
+          console.warn(`[Terminal WS] Unknown message type: ${msg.type}`);
+      }
+    } catch (error) {
+      console.error("[Terminal WS] Error processing message:", error);
+    }
+  });
+
+  ws.on("close", () => {
+    console.log(`[Terminal WS] Client disconnected from session ${sessionId}`);
+    unsubscribeData();
+    unsubscribeExit();
+
+    // Remove from connections tracking
+    const connections = terminalConnections.get(sessionId);
+    if (connections) {
+      connections.delete(ws);
+      if (connections.size === 0) {
+        terminalConnections.delete(sessionId);
+      }
+    }
+  });
+
+  ws.on("error", (error) => {
+    console.error(`[Terminal WS] Error on session ${sessionId}:`, error);
+    unsubscribeData();
+    unsubscribeExit();
+  });
+
+  // Send initial connection success
+  ws.send(JSON.stringify({
+    type: "connected",
+    sessionId,
+    shell: session.shell,
+    cwd: session.cwd,
+  }));
+
+  // Send scrollback buffer to replay previous output
+  const scrollback = terminalService.getScrollback(sessionId);
+  if (scrollback && scrollback.length > 0) {
+    ws.send(JSON.stringify({
+      type: "scrollback",
+      data: scrollback,
+    }));
+  }
+});
+
 // Start server
 server.listen(PORT, () => {
+  const terminalStatus = isTerminalEnabled()
+    ? (isTerminalPasswordRequired() ? "enabled (password protected)" : "enabled")
+    : "disabled";
   console.log(`
 ╔═══════════════════════════════════════════════════════╗
 ║           Automaker Backend Server                    ║
 ╠═══════════════════════════════════════════════════════╣
 ║  HTTP API:    http://localhost:${PORT}                  ║
 ║  WebSocket:   ws://localhost:${PORT}/api/events         ║
+║  Terminal:    ws://localhost:${PORT}/api/terminal/ws    ║
 ║  Health:      http://localhost:${PORT}/api/health       ║
+║  Terminal:    ${terminalStatus.padEnd(37)}║
 ╚═══════════════════════════════════════════════════════╝
 `);
 });
@@ -160,6 +321,7 @@ server.listen(PORT, () => {
 // Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down...");
+  terminalService.cleanup();
   server.close(() => {
     console.log("Server closed");
     process.exit(0);
@@ -168,6 +330,7 @@ process.on("SIGTERM", () => {
 
 process.on("SIGINT", () => {
   console.log("SIGINT received, shutting down...");
+  terminalService.cleanup();
   server.close(() => {
     console.log("Server closed");
     process.exit(0);
