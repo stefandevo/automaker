@@ -19,27 +19,9 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
           Welcome to Automaker
         </h2>
         <p className="text-muted-foreground max-w-md mx-auto">
-          Let&apos;s set up your development environment. We&apos;ll check for
-          required CLI tools and help you configure them.
+          To get started, we&apos;ll need to verify either claude code cli is
+          installed or you have Anthropic api keys
         </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 max-w-md mx-auto place-items-center">
-        <Card className="bg-card/50 border-border hover:border-brand-500/50 transition-colors">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Terminal className="w-5 h-5 text-brand-500" />
-              Claude CLI
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Anthropic&apos;s powerful AI assistant for code generation and
-              analysis
-            </p>
-          </CardContent>
-        </Card>
-
       </div>
 
       <Button

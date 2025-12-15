@@ -355,6 +355,9 @@ export interface ElectronAPI {
       provider: string,
       apiKey: string
     ) => Promise<{ success: boolean; error?: string }>;
+    deleteApiKey: (
+      provider: string
+    ) => Promise<{ success: boolean; error?: string; message?: string }>;
     getApiKeys: () => Promise<{
       success: boolean;
       hasAnthropicKey: boolean;
@@ -368,6 +371,11 @@ export interface ElectronAPI {
       isWindows: boolean;
       isMac: boolean;
       isLinux: boolean;
+    }>;
+    verifyClaudeAuth: (authMethod?: "cli" | "api_key") => Promise<{
+      success: boolean;
+      authenticated: boolean;
+      error?: string;
     }>;
     onInstallProgress?: (callback: (progress: any) => void) => () => void;
     onAuthProgress?: (callback: (progress: any) => void) => () => void;
@@ -874,6 +882,9 @@ interface SetupAPI {
     hasAnthropicKey: boolean;
     hasGoogleKey: boolean;
   }>;
+  deleteApiKey: (
+    provider: string
+  ) => Promise<{ success: boolean; error?: string; message?: string }>;
   getPlatform: () => Promise<{
     success: boolean;
     platform: string;
@@ -882,6 +893,11 @@ interface SetupAPI {
     isWindows: boolean;
     isMac: boolean;
     isLinux: boolean;
+  }>;
+  verifyClaudeAuth: (authMethod?: "cli" | "api_key") => Promise<{
+    success: boolean;
+    authenticated: boolean;
+    error?: string;
   }>;
   onInstallProgress?: (callback: (progress: any) => void) => () => void;
   onAuthProgress?: (callback: (progress: any) => void) => () => void;
@@ -942,6 +958,11 @@ function createMockSetupAPI(): SetupAPI {
       };
     },
 
+    deleteApiKey: async (provider: string) => {
+      console.log("[Mock] Deleting API key for:", provider);
+      return { success: true, message: `API key for ${provider} deleted` };
+    },
+
     getPlatform: async () => {
       return {
         success: true,
@@ -951,6 +972,16 @@ function createMockSetupAPI(): SetupAPI {
         isWindows: false,
         isMac: true,
         isLinux: false,
+      };
+    },
+
+    verifyClaudeAuth: async (authMethod?: "cli" | "api_key") => {
+      console.log("[Mock] Verifying Claude auth with method:", authMethod);
+      // Mock always returns not authenticated
+      return {
+        success: true,
+        authenticated: false,
+        error: "Mock environment - authentication not available",
       };
     },
 

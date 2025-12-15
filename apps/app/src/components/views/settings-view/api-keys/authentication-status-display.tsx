@@ -48,7 +48,9 @@ export function AuthenticationStatusDisplay({
               <>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
-                  <span className="text-green-400 font-medium">Authenticated</span>
+                  <span className="text-green-400 font-medium">
+                    Authenticated
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Info className="w-3 h-3 shrink-0" />
@@ -65,7 +67,9 @@ export function AuthenticationStatusDisplay({
                       ? "Using credentials file"
                       : claudeAuthStatus.method === "cli_authenticated"
                       ? "Using Claude CLI authentication"
-                      : `Using ${claudeAuthStatus.method || "detected"} authentication`}
+                      : `Using ${
+                          claudeAuthStatus.method || "detected"
+                        } authentication`}
                   </span>
                 </div>
               </>
@@ -79,46 +83,6 @@ export function AuthenticationStatusDisplay({
                 <Info className="w-3 h-3 shrink-0" />
                 <span>Using manual API key from settings</span>
               </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-yellow-500 py-0.5">
-                <AlertCircle className="w-3 h-3 shrink-0" />
-                <span className="text-xs">Not configured</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Google/Gemini Authentication Status */}
-        <div className="p-3 rounded-lg bg-card border border-border">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Sparkles className="w-4 h-4 text-purple-500" />
-            <span className="text-sm font-medium text-foreground">
-              Gemini (Google)
-            </span>
-          </div>
-          <div className="space-y-1.5 text-xs min-h-12">
-            {apiKeyStatus?.hasGoogleKey ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
-                  <span className="text-green-400 font-medium">Authenticated</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Info className="w-3 h-3 shrink-0" />
-                  <span>Using GOOGLE_API_KEY</span>
-                </div>
-              </>
-            ) : apiKeys.google ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
-                  <span className="text-green-400 font-medium">Authenticated</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Info className="w-3 h-3 shrink-0" />
-                  <span>Using stored API key</span>
-                </div>
-              </>
             ) : (
               <div className="flex items-center gap-1.5 text-yellow-500 py-0.5">
                 <AlertCircle className="w-3 h-3 shrink-0" />

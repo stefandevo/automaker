@@ -1,11 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  CheckCircle2,
-  AlertCircle,
-  Shield,
-  Sparkles,
-} from "lucide-react";
+import { CheckCircle2, AlertCircle, Shield, Sparkles } from "lucide-react";
 import { useSetupStore } from "@/store/setup-store";
 import { useAppStore } from "@/store/app-store";
 
@@ -14,8 +9,7 @@ interface CompleteStepProps {
 }
 
 export function CompleteStep({ onFinish }: CompleteStepProps) {
-  const { claudeCliStatus, claudeAuthStatus } =
-    useSetupStore();
+  const { claudeCliStatus, claudeAuthStatus } = useSetupStore();
   const { apiKeys } = useAppStore();
 
   const claudeReady =
@@ -36,44 +30,6 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
           Your development environment is configured. You&apos;re ready to start
           building with AI-powered assistance.
         </p>
-      </div>
-
-      <div className="max-w-md mx-auto">
-        <Card
-          className={`bg-card/50 border ${
-            claudeReady ? "border-green-500/50" : "border-yellow-500/50"
-          }`}
-        >
-          <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              {claudeReady ? (
-                <CheckCircle2 className="w-6 h-6 text-green-500" />
-              ) : (
-                <AlertCircle className="w-6 h-6 text-yellow-500" />
-              )}
-              <div className="text-left">
-                <p className="font-medium text-foreground">Claude</p>
-                <p className="text-sm text-muted-foreground">
-                  {claudeReady ? "Ready to use" : "Configure later in settings"}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="p-4 rounded-lg bg-muted/50 border border-border max-w-md mx-auto">
-        <div className="flex items-start gap-3">
-          <Shield className="w-5 h-5 text-brand-500 mt-0.5" />
-          <div className="text-left">
-            <p className="text-sm font-medium text-foreground">
-              Your credentials are secure
-            </p>
-            <p className="text-xs text-muted-foreground">
-              API keys are stored locally and never sent to our servers
-            </p>
-          </div>
-        </div>
       </div>
 
       <Button

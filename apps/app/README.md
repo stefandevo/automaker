@@ -33,26 +33,23 @@ cd automaker
 npm install
 ```
 
-### Windows notes (in-app Claude auth)
-
-- Node.js 22.x
-- Prebuilt PTY is bundled; Visual Studio build tools are not required for Claude auth.
-- If you prefer the external terminal flow, set `CLAUDE_AUTH_DISABLE_PTY=1`.
-- If you later add native modules beyond the prebuilt PTY, you may still need VS Build Tools + Python to rebuild those.
-
-**Step 3:** Run the Claude Code setup token command:
+**Step 3:** Get your Claude subscription token:
 
 ```bash
 claude setup-token
 ```
 
+This command will authenticate you via your browser and print a token to your terminal.
+
 > **⚠️ Warning:** This command will print your token to your terminal. Be careful if you're streaming or sharing your screen, as the token will be visible to anyone watching.
 
-**Step 4:** Export the Claude Code OAuth token in your shell:
+**Step 4:** Export the Claude Code OAuth token in your shell (optional - you can also enter it in the app's setup wizard):
 
 ```bash
 export CLAUDE_CODE_OAUTH_TOKEN="your-token-here"
 ```
+
+Alternatively, you can enter your token directly in the Automaker setup wizard when you launch the app.
 
 **Step 5:** Start the development server:
 
@@ -61,27 +58,6 @@ npm run dev:electron
 ```
 
 This will start both the Next.js development server and the Electron application.
-
-### Auth smoke test (Windows)
-
-1. Ensure dependencies are installed (prebuilt pty is included).
-2. Run `npm run dev:electron` and open the Setup modal.
-3. Click Start on Claude auth; watch the embedded terminal stream logs.
-4. Successful runs show “Token captured automatically.”; otherwise copy/paste the token from the log.
-5. Optional: `node --test tests/claude-cli-detector.test.js` to verify token parsing.
-
-**Step 6:** MOST IMPORTANT: Run the Following after all is setup
-
-```bash
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-```
 
 ## Features
 

@@ -1,22 +1,60 @@
 import { useAppStore } from "@/store/app-store";
 import { useSetupStore } from "@/store/setup-store";
 import { Button } from "@/components/ui/button";
-import { Key, CheckCircle2 } from "lucide-react";
+import { Key, CheckCircle2, Settings, Trash2, Loader2 } from "lucide-react";
 import { ApiKeyField } from "./api-key-field";
 import { buildProviderConfigs } from "@/config/api-providers";
 import { AuthenticationStatusDisplay } from "./authentication-status-display";
 import { SecurityNotice } from "./security-notice";
 import { useApiKeyManagement } from "./hooks/use-api-key-management";
 import { cn } from "@/lib/utils";
+import { useState, useCallback } from "react";
+import { getElectronAPI } from "@/lib/electron";
+import { toast } from "sonner";
 
 export function ApiKeysSection() {
-  const { apiKeys } = useAppStore();
-  const { claudeAuthStatus } = useSetupStore();
+  const { apiKeys, setApiKeys } = useAppStore();
+  const { claudeAuthStatus, setClaudeAuthStatus, setSetupComplete } = useSetupStore();
+  const [isDeletingAnthropicKey, setIsDeletingAnthropicKey] = useState(false);
 
   const { providerConfigParams, apiKeyStatus, handleSave, saved } =
     useApiKeyManagement();
 
   const providerConfigs = buildProviderConfigs(providerConfigParams);
+
+  // Delete Anthropic API key
+  const deleteAnthropicKey = useCallback(async () => {
+    setIsDeletingAnthropicKey(true);
+    try {
+      const api = getElectronAPI();
+      if (!api.setup?.deleteApiKey) {
+        toast.error("Delete API not available");
+        return;
+      }
+
+      const result = await api.setup.deleteApiKey("anthropic");
+      if (result.success) {
+        setApiKeys({ ...apiKeys, anthropic: "" });
+        setClaudeAuthStatus({
+          authenticated: false,
+          method: "none",
+          hasCredentialsFile: claudeAuthStatus?.hasCredentialsFile || false,
+        });
+        toast.success("Anthropic API key deleted");
+      } else {
+        toast.error(result.error || "Failed to delete API key");
+      }
+    } catch (error) {
+      toast.error("Failed to delete API key");
+    } finally {
+      setIsDeletingAnthropicKey(false);
+    }
+  }, [apiKeys, setApiKeys, claudeAuthStatus, setClaudeAuthStatus]);
+
+  // Open setup wizard
+  const openSetupWizard = useCallback(() => {
+    setSetupComplete(false);
+  }, [setSetupComplete]);
 
   return (
     <div
@@ -55,8 +93,8 @@ export function ApiKeysSection() {
         {/* Security Notice */}
         <SecurityNotice />
 
-        {/* Save Button */}
-        <div className="flex items-center gap-4 pt-2">
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-3 pt-2">
           <Button
             onClick={handleSave}
             data-testid="save-settings"
@@ -79,6 +117,33 @@ export function ApiKeysSection() {
               "Save API Keys"
             )}
           </Button>
+
+          <Button
+            onClick={openSetupWizard}
+            variant="outline"
+            className="h-10 border-border"
+            data-testid="run-setup-wizard"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Run Setup Wizard
+          </Button>
+
+          {apiKeys.anthropic && (
+            <Button
+              onClick={deleteAnthropicKey}
+              disabled={isDeletingAnthropicKey}
+              variant="outline"
+              className="h-10 border-red-500/30 text-red-500 hover:bg-red-500/10 hover:border-red-500/50"
+              data-testid="delete-anthropic-key"
+            >
+              {isDeletingAnthropicKey ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Delete Anthropic Key
+            </Button>
+          )}
         </div>
       </div>
     </div>

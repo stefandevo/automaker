@@ -1,2 +1,2 @@
 // Re-export all setup dialog components for easier imports
-export { SetupTokenModal } from "./setup-token-modal";
+// (SetupTokenModal was removed - setup flow now uses inline API key entry)

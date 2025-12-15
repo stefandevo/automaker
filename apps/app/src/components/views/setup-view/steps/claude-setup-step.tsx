@@ -11,6 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useSetupStore } from "@/store/setup-store";
 import { useAppStore } from "@/store/app-store";
 import { getElectronAPI } from "@/lib/electron";
@@ -23,19 +29,17 @@ import {
   ArrowLeft,
   ExternalLink,
   Copy,
-  AlertCircle,
   RefreshCw,
   Download,
-  Shield,
+  Info,
+  AlertTriangle,
+  ShieldCheck,
+  XCircle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { SetupTokenModal } from "../dialogs";
 import { StatusBadge, TerminalOutput } from "../components";
-import {
-  useCliStatus,
-  useCliInstallation,
-  useTokenSave,
-} from "../hooks";
+import { useCliStatus, useCliInstallation, useTokenSave } from "../hooks";
 
 interface ClaudeSetupStepProps {
   onNext: () => void;
@@ -43,9 +47,12 @@ interface ClaudeSetupStepProps {
   onSkip: () => void;
 }
 
-// Claude Setup Step - 2 Authentication Options:
-// 1. OAuth Token (Subscription): User runs `claude setup-token` and provides the token
-// 2. API Key (Pay-per-use): User provides their Anthropic API key directly
+type VerificationStatus = "idle" | "verifying" | "verified" | "error";
+
+// Claude Setup Step
+// Users can either:
+// 1. Have Claude CLI installed and authenticated (verified by running a test query)
+// 2. Provide an Anthropic API key manually
 export function ClaudeSetupStep({
   onNext,
   onBack,
@@ -60,10 +67,24 @@ export function ClaudeSetupStep({
   } = useSetupStore();
   const { setApiKeys, apiKeys } = useAppStore();
 
-  const [authMethod, setAuthMethod] = useState<"token" | "api_key" | null>(null);
-  const [oauthToken, setOAuthToken] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [showTokenModal, setShowTokenModal] = useState(false);
+
+  // CLI Verification state
+  const [cliVerificationStatus, setCliVerificationStatus] =
+    useState<VerificationStatus>("idle");
+  const [cliVerificationError, setCliVerificationError] = useState<
+    string | null
+  >(null);
+
+  // API Key Verification state
+  const [apiKeyVerificationStatus, setApiKeyVerificationStatus] =
+    useState<VerificationStatus>("idle");
+  const [apiKeyVerificationError, setApiKeyVerificationError] = useState<
+    string | null
+  >(null);
+
+  // Delete API Key state
+  const [isDeletingApiKey, setIsDeletingApiKey] = useState(false);
 
   // Memoize API functions to prevent infinite loops
   const statusApi = useCallback(
@@ -101,34 +122,151 @@ export function ClaudeSetupStep({
     getStoreState,
   });
 
-  const { isSaving: isSavingOAuth, saveToken: saveOAuthToken } = useTokenSave({
-    provider: "anthropic_oauth_token",
-    onSuccess: () => {
-      setClaudeAuthStatus({
-        authenticated: true,
-        method: "oauth_token",
-        hasCredentialsFile: false,
-        oauthTokenValid: true,
-      });
-      setAuthMethod(null);
-      checkStatus();
-    },
-  });
+  const { isSaving: isSavingApiKey, saveToken: saveApiKeyToken } = useTokenSave(
+    {
+      provider: "anthropic",
+      onSuccess: () => {
+        setClaudeAuthStatus({
+          authenticated: true,
+          method: "api_key",
+          hasCredentialsFile: false,
+          apiKeyValid: true,
+        });
+        setApiKeys({ ...apiKeys, anthropic: apiKey });
+        toast.success("API key saved successfully!");
+      },
+    }
+  );
 
-  const { isSaving: isSavingApiKey, saveToken: saveApiKeyToken } = useTokenSave({
-    provider: "anthropic",
-    onSuccess: () => {
-      setClaudeAuthStatus({
-        authenticated: true,
-        method: "api_key",
-        hasCredentialsFile: false,
-        apiKeyValid: true,
-      });
-      setApiKeys({ ...apiKeys, anthropic: apiKey });
-      setAuthMethod(null);
-      checkStatus();
-    },
-  });
+  // Verify CLI authentication by running a test query (uses CLI credentials only, not API key)
+  const verifyCliAuth = useCallback(async () => {
+    setCliVerificationStatus("verifying");
+    setCliVerificationError(null);
+
+    try {
+      const api = getElectronAPI();
+      if (!api.setup?.verifyClaudeAuth) {
+        setCliVerificationStatus("error");
+        setCliVerificationError("Verification API not available");
+        return;
+      }
+
+      // Pass "cli" to verify CLI authentication only (ignores any API key)
+      const result = await api.setup.verifyClaudeAuth("cli");
+
+      // Check for "Limit reached" error - treat as unverified
+      const hasLimitReachedError =
+        result.error?.toLowerCase().includes("limit reached") ||
+        result.error?.toLowerCase().includes("rate limit");
+
+      if (result.authenticated && !hasLimitReachedError) {
+        setCliVerificationStatus("verified");
+        setClaudeAuthStatus({
+          authenticated: true,
+          method: "cli_authenticated",
+          hasCredentialsFile: claudeAuthStatus?.hasCredentialsFile || false,
+        });
+        toast.success("Claude CLI authentication verified!");
+      } else {
+        setCliVerificationStatus("error");
+        setCliVerificationError(
+          hasLimitReachedError
+            ? "Rate limit reached. Please try again later."
+            : result.error || "Authentication failed"
+        );
+        setClaudeAuthStatus({
+          authenticated: false,
+          method: "none",
+          hasCredentialsFile: claudeAuthStatus?.hasCredentialsFile || false,
+        });
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Verification failed";
+      // Also check for limit reached in caught errors
+      const isLimitError =
+        errorMessage.toLowerCase().includes("limit reached") ||
+        errorMessage.toLowerCase().includes("rate limit");
+      setCliVerificationStatus("error");
+      setCliVerificationError(
+        isLimitError
+          ? "Rate limit reached. Please try again later."
+          : errorMessage
+      );
+    }
+  }, [claudeAuthStatus, setClaudeAuthStatus]);
+
+  // Verify API Key authentication (uses API key only)
+  const verifyApiKeyAuth = useCallback(async () => {
+    setApiKeyVerificationStatus("verifying");
+    setApiKeyVerificationError(null);
+
+    try {
+      const api = getElectronAPI();
+      if (!api.setup?.verifyClaudeAuth) {
+        setApiKeyVerificationStatus("error");
+        setApiKeyVerificationError("Verification API not available");
+        return;
+      }
+
+      // Pass "api_key" to verify API key authentication only
+      const result = await api.setup.verifyClaudeAuth("api_key");
+
+      if (result.authenticated) {
+        setApiKeyVerificationStatus("verified");
+        setClaudeAuthStatus({
+          authenticated: true,
+          method: "api_key",
+          hasCredentialsFile: false,
+          apiKeyValid: true,
+        });
+        toast.success("API key authentication verified!");
+      } else {
+        setApiKeyVerificationStatus("error");
+        setApiKeyVerificationError(result.error || "Authentication failed");
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Verification failed";
+      setApiKeyVerificationStatus("error");
+      setApiKeyVerificationError(errorMessage);
+    }
+  }, [setClaudeAuthStatus]);
+
+  // Delete API Key
+  const deleteApiKey = useCallback(async () => {
+    setIsDeletingApiKey(true);
+    try {
+      const api = getElectronAPI();
+      if (!api.setup?.deleteApiKey) {
+        toast.error("Delete API not available");
+        return;
+      }
+
+      const result = await api.setup.deleteApiKey("anthropic");
+      if (result.success) {
+        // Clear local state
+        setApiKey("");
+        setApiKeys({ ...apiKeys, anthropic: "" });
+        setApiKeyVerificationStatus("idle");
+        setApiKeyVerificationError(null);
+        setClaudeAuthStatus({
+          authenticated: false,
+          method: "none",
+          hasCredentialsFile: claudeAuthStatus?.hasCredentialsFile || false,
+        });
+        toast.success("API key deleted successfully");
+      } else {
+        toast.error(result.error || "Failed to delete API key");
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete API key";
+      toast.error(errorMessage);
+    } finally {
+      setIsDeletingApiKey(false);
+    }
+  }, [apiKeys, setApiKeys, claudeAuthStatus, setClaudeAuthStatus]);
 
   // Sync install progress to store
   useEffect(() => {
@@ -148,32 +286,52 @@ export function ClaudeSetupStep({
     toast.success("Command copied to clipboard");
   };
 
-  // Handle token obtained from the OAuth modal
-  const handleTokenFromModal = useCallback(
-    async (token: string) => {
-      setOAuthToken(token);
-      setShowTokenModal(false);
-      await saveOAuthToken(token);
-    },
-    [saveOAuthToken]
-  );
-
-  const isAuthenticated = claudeAuthStatus?.authenticated || apiKeys.anthropic;
+  // User is ready if either method is verified
+  const hasApiKey =
+    !!apiKeys.anthropic ||
+    claudeAuthStatus?.method === "api_key" ||
+    claudeAuthStatus?.method === "api_key_env";
+  const isCliVerified = cliVerificationStatus === "verified";
+  const isApiKeyVerified = apiKeyVerificationStatus === "verified";
+  const isReady = isCliVerified || isApiKeyVerified;
 
   const getAuthMethodLabel = () => {
-    if (!isAuthenticated) return null;
-    if (
-      claudeAuthStatus?.method === "oauth_token_env" ||
-      claudeAuthStatus?.method === "oauth_token"
-    )
-      return "Subscription Token";
-    if (
-      apiKeys.anthropic ||
-      claudeAuthStatus?.method === "api_key" ||
-      claudeAuthStatus?.method === "api_key_env"
-    )
-      return "API Key";
-    return "Authenticated";
+    if (isApiKeyVerified) return "API Key";
+    if (isCliVerified) return "Claude CLI";
+    return null;
+  };
+
+  // Helper to get status badge for CLI
+  const getCliStatusBadge = () => {
+    if (cliVerificationStatus === "verified") {
+      return <StatusBadge status="authenticated" label="Verified" />;
+    }
+    if (cliVerificationStatus === "error") {
+      return <StatusBadge status="error" label="Error" />;
+    }
+    if (isChecking) {
+      return <StatusBadge status="checking" label="Checking..." />;
+    }
+    if (claudeCliStatus?.installed) {
+      // Installed but not yet verified - show yellow unverified badge
+      return <StatusBadge status="unverified" label="Unverified" />;
+    }
+    return <StatusBadge status="not_installed" label="Not Installed" />;
+  };
+
+  // Helper to get status badge for API Key
+  const getApiKeyStatusBadge = () => {
+    if (apiKeyVerificationStatus === "verified") {
+      return <StatusBadge status="authenticated" label="Verified" />;
+    }
+    if (apiKeyVerificationStatus === "error") {
+      return <StatusBadge status="error" label="Error" />;
+    }
+    if (hasApiKey) {
+      // API key configured but not yet verified - show yellow unverified badge
+      return <StatusBadge status="unverified" label="Unverified" />;
+    }
+    return <StatusBadge status="not_authenticated" label="Not Set" />;
   };
 
   return (
@@ -183,18 +341,19 @@ export function ClaudeSetupStep({
           <Terminal className="w-8 h-8 text-brand-500" />
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-2">
-          Claude Setup
+          API Key Setup
         </h2>
-        <p className="text-muted-foreground">
-          Configure Claude for code generation
-        </p>
+        <p className="text-muted-foreground">Configure for code generation</p>
       </div>
 
-      {/* Status Card */}
+      {/* Requirements Info */}
       <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Status</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Info className="w-5 h-5" />
+              Authentication Methods
+            </CardTitle>
             <Button
               variant="ghost"
               size="sm"
@@ -206,361 +365,376 @@ export function ClaudeSetupStep({
               />
             </Button>
           </div>
+          <CardDescription>
+            Choose one of the following methods to authenticate with Claude:
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-foreground">CLI Installation</span>
-            {isChecking ? (
-              <StatusBadge status="checking" label="Checking..." />
-            ) : claudeCliStatus?.installed ? (
-              <StatusBadge status="installed" label="Installed" />
-            ) : (
-              <StatusBadge status="not_installed" label="Not Installed" />
-            )}
-          </div>
+        <CardContent>
+          <Accordion type="single" collapsible className="w-full">
+            {/* Option 1: Claude CLI */}
+            <AccordionItem value="cli" className="border-border">
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex items-center justify-between w-full pr-4">
+                  <div className="flex items-center gap-3">
+                    <Terminal
+                      className={`w-5 h-5 ${
+                        cliVerificationStatus === "verified"
+                          ? "text-green-500"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                    <div className="text-left">
+                      <p className="font-medium text-foreground">Claude CLI</p>
+                      <p className="text-sm text-muted-foreground">
+                        Use Claude Code subscription
+                      </p>
+                    </div>
+                  </div>
+                  {getCliStatusBadge()}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-4 space-y-4">
+                {/* CLI Install Section */}
+                {!claudeCliStatus?.installed && (
+                  <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border">
+                    <div className="flex items-center gap-2">
+                      <Download className="w-4 h-4 text-muted-foreground" />
+                      <p className="font-medium text-foreground">
+                        Install Claude CLI
+                      </p>
+                    </div>
 
-          {claudeCliStatus?.version && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Version</span>
-              <span className="text-sm font-mono text-foreground">
-                {claudeCliStatus.version}
-              </span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-foreground">Authentication</span>
-            {isAuthenticated ? (
-              <div className="flex items-center gap-2">
-                <StatusBadge status="authenticated" label="Authenticated" />
-                {getAuthMethodLabel() && (
-                  <span className="text-xs text-muted-foreground">
-                    ({getAuthMethodLabel()})
-                  </span>
-                )}
-              </div>
-            ) : (
-              <StatusBadge
-                status="not_authenticated"
-                label="Not Authenticated"
-              />
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Installation Section */}
-      {!claudeCliStatus?.installed && (
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Download className="w-5 h-5" />
-              Install Claude CLI
-            </CardTitle>
-            <CardDescription>
-              Required for subscription-based authentication
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm text-muted-foreground">
-                macOS / Linux
-              </Label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono text-foreground">
-                  curl -fsSL https://claude.ai/install.sh | bash
-                </code>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() =>
-                    copyCommand(
-                      "curl -fsSL https://claude.ai/install.sh | bash"
-                    )
-                  }
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm text-muted-foreground">Windows</Label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono text-foreground">
-                  irm https://claude.ai/install.ps1 | iex
-                </code>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() =>
-                    copyCommand("irm https://claude.ai/install.ps1 | iex")
-                  }
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {isInstalling && (
-              <TerminalOutput lines={installProgress.output} />
-            )}
-
-            <Button
-              onClick={install}
-              disabled={isInstalling}
-              className="w-full bg-brand-500 hover:bg-brand-600 text-white"
-              data-testid="install-claude-button"
-            >
-              {isInstalling ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Installing...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4 mr-2" />
-                  Auto Install
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Authentication Section */}
-      {!isAuthenticated && (
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Key className="w-5 h-5" />
-              Authentication
-            </CardTitle>
-            <CardDescription>Choose your authentication method</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Option 1: Subscription Token */}
-            {authMethod === "token" ? (
-              <div className="p-4 rounded-lg bg-brand-500/5 border border-brand-500/20 space-y-4">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-brand-500 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">
-                      Subscription Token
-                    </p>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Use your Claude subscription (no API charges)
-                    </p>
-
-                    {claudeCliStatus?.installed ? (
-                      <>
-                        {/* Primary: Automated OAuth setup */}
+                    <div className="space-y-2">
+                      <Label className="text-sm text-muted-foreground">
+                        macOS / Linux
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono text-foreground">
+                          curl -fsSL https://claude.ai/install.sh | bash
+                        </code>
                         <Button
-                          onClick={() => setShowTokenModal(true)}
-                          className="w-full bg-brand-500 hover:bg-brand-600 text-white mb-4"
-                          data-testid="setup-oauth-button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            copyCommand(
+                              "curl -fsSL https://claude.ai/install.sh | bash"
+                            )
+                          }
                         >
-                          <Terminal className="w-4 h-4 mr-2" />
-                          Setup with OAuth
+                          <Copy className="w-4 h-4" />
                         </Button>
-
-                        {/* Divider */}
-                        <div className="relative my-4">
-                          <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t border-border" />
-                          </div>
-                          <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-brand-500/5 px-2 text-muted-foreground">
-                              or paste manually
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Fallback: Manual token entry */}
-                        <div className="space-y-2">
-                          <Label className="text-foreground text-sm">
-                            Paste token from{" "}
-                            <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                              claude setup-token
-                            </code>
-                            :
-                          </Label>
-                          <Input
-                            type="password"
-                            placeholder="Paste token here..."
-                            value={oauthToken}
-                            onChange={(e) => setOAuthToken(e.target.value)}
-                            className="bg-input border-border text-foreground"
-                            data-testid="oauth-token-input"
-                          />
-                        </div>
-
-                        <div className="flex gap-2 mt-3">
-                          <Button
-                            variant="outline"
-                            onClick={() => setAuthMethod(null)}
-                            className="border-border"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={() => saveOAuthToken(oauthToken)}
-                            disabled={isSavingOAuth || !oauthToken.trim()}
-                            className="flex-1 bg-brand-500 hover:bg-brand-600 text-white"
-                            data-testid="save-oauth-token-button"
-                          >
-                            {isSavingOAuth ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              "Save Token"
-                            )}
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="p-3 rounded bg-yellow-500/10 border border-yellow-500/20">
-                        <p className="text-sm text-yellow-600">
-                          <AlertCircle className="w-4 h-4 inline mr-1" />
-                          Install Claude CLI first to use subscription
-                          authentication
-                        </p>
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm text-muted-foreground">
+                        Windows
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono text-foreground">
+                          irm https://claude.ai/install.ps1 | iex
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            copyCommand(
+                              "irm https://claude.ai/install.ps1 | iex"
+                            )
+                          }
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isInstalling && (
+                      <TerminalOutput lines={installProgress.output} />
+                    )}
+
+                    <Button
+                      onClick={install}
+                      disabled={isInstalling}
+                      className="w-full bg-brand-500 hover:bg-brand-600 text-white"
+                      data-testid="install-claude-button"
+                    >
+                      {isInstalling ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Installing...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 mr-2" />
+                          Auto Install
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {/* CLI Version Info */}
+                {claudeCliStatus?.installed && claudeCliStatus?.version && (
+                  <p className="text-sm text-muted-foreground">
+                    Version: {claudeCliStatus.version}
+                  </p>
+                )}
+
+                {/* CLI Verification Status */}
+                {cliVerificationStatus === "verifying" && (
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        Verifying CLI authentication...
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Running a test query
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {cliVerificationStatus === "verified" && (
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        CLI Authentication verified!
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Your Claude CLI is working correctly.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {cliVerificationStatus === "error" && cliVerificationError && (
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">
+                        Verification failed
+                      </p>
+                      <p className="text-sm text-red-400 mt-1">
+                        {cliVerificationError}
+                      </p>
+                      {cliVerificationError.includes("login") && (
+                        <div className="mt-3 p-3 rounded bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Run this command in your terminal:
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono text-foreground">
+                              claude login
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => copyCommand("claude login")}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* CLI Verify Button */}
+                <Button
+                  onClick={verifyCliAuth}
+                  disabled={
+                    cliVerificationStatus === "verifying" ||
+                    !claudeCliStatus?.installed
+                  }
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white"
+                  data-testid="verify-cli-button"
+                >
+                  {cliVerificationStatus === "verifying" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : cliVerificationStatus === "error" ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Retry Verification
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4 mr-2" />
+                      Verify CLI Authentication
+                    </>
+                  )}
+                </Button>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Option 2: API Key */}
+            <AccordionItem value="api-key" className="border-border">
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex items-center justify-between w-full pr-4">
+                  <div className="flex items-center gap-3">
+                    <Key
+                      className={`w-5 h-5 ${
+                        apiKeyVerificationStatus === "verified"
+                          ? "text-green-500"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                    <div className="text-left">
+                      <p className="font-medium text-foreground">
+                        Anthropic API Key
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Pay-per-use with your own API key
+                      </p>
+                    </div>
+                  </div>
+                  {getApiKeyStatusBadge()}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-4 space-y-4">
+                {/* API Key Input */}
+                <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border">
+                  <div className="space-y-2">
+                    <Label htmlFor="anthropic-key" className="text-foreground">
+                      Anthropic API Key
+                    </Label>
+                    <Input
+                      id="anthropic-key"
+                      type="password"
+                      placeholder="sk-ant-..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="bg-input border-border text-foreground"
+                      data-testid="anthropic-api-key-input"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Don&apos;t have an API key?{" "}
+                      <a
+                        href="https://console.anthropic.com/settings/keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-500 hover:underline"
+                      >
+                        Get one from Anthropic Console
+                        <ExternalLink className="w-3 h-3 inline ml-1" />
+                      </a>
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => saveApiKeyToken(apiKey)}
+                      disabled={isSavingApiKey || !apiKey.trim()}
+                      className="flex-1 bg-brand-500 hover:bg-brand-600 text-white"
+                      data-testid="save-anthropic-key-button"
+                    >
+                      {isSavingApiKey ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save API Key"
+                      )}
+                    </Button>
+                    {hasApiKey && (
+                      <Button
+                        onClick={deleteApiKey}
+                        disabled={isDeletingApiKey}
+                        variant="outline"
+                        className="border-red-500/50 text-red-500 hover:bg-red-500/10 hover:text-red-400"
+                        data-testid="delete-anthropic-key-button"
+                      >
+                        {isDeletingApiKey ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </Button>
                     )}
                   </div>
                 </div>
-              </div>
-            ) : authMethod === "api_key" ? (
-              /* Option 2: API Key */
-              <div className="p-4 rounded-lg bg-green-500/5 border border-green-500/20 space-y-4">
-                <div className="flex items-start gap-3">
-                  <Key className="w-5 h-5 text-green-500 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">API Key</p>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Pay-per-use with your Anthropic API key
-                    </p>
 
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="anthropic-key"
-                        className="text-foreground"
-                      >
-                        Anthropic API Key
-                      </Label>
-                      <Input
-                        id="anthropic-key"
-                        type="password"
-                        placeholder="sk-ant-..."
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        className="bg-input border-border text-foreground"
-                        data-testid="anthropic-api-key-input"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Get your API key from{" "}
-                        <a
-                          href="https://console.anthropic.com/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-brand-500 hover:underline"
-                        >
-                          console.anthropic.com
-                          <ExternalLink className="w-3 h-3 inline ml-1" />
-                        </a>
-                      </p>
-                    </div>
-
-                    <div className="flex gap-2 mt-3">
-                      <Button
-                        variant="outline"
-                        onClick={() => setAuthMethod(null)}
-                        className="border-border"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={() => saveApiKeyToken(apiKey)}
-                        disabled={isSavingApiKey || !apiKey.trim()}
-                        className="flex-1 bg-green-500 hover:bg-green-600 text-white"
-                        data-testid="save-anthropic-key-button"
-                      >
-                        {isSavingApiKey ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          "Save API Key"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Auth Method Selection */
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setAuthMethod("token")}
-                  className="p-4 rounded-lg border border-border hover:border-brand-500/50 bg-card hover:bg-brand-500/5 transition-all text-left"
-                  data-testid="select-subscription-auth"
-                >
-                  <div className="flex items-start gap-3">
-                    <Shield className="w-6 h-6 text-brand-500" />
+                {/* API Key Verification Status */}
+                {apiKeyVerificationStatus === "verifying" && (
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
                     <div>
                       <p className="font-medium text-foreground">
-                        Subscription
+                        Verifying API key...
                       </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Use your Claude subscription
-                      </p>
-                      <p className="text-xs text-brand-500 mt-2">
-                        No API charges
+                      <p className="text-sm text-muted-foreground">
+                        Running a test query
                       </p>
                     </div>
                   </div>
-                </button>
+                )}
 
-                <button
-                  onClick={() => setAuthMethod("api_key")}
-                  className="p-4 rounded-lg border border-border hover:border-green-500/50 bg-card hover:bg-green-500/5 transition-all text-left"
-                  data-testid="select-api-key-auth"
-                >
-                  <div className="flex items-start gap-3">
-                    <Key className="w-6 h-6 text-green-500" />
+                {apiKeyVerificationStatus === "verified" && (
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
                     <div>
-                      <p className="font-medium text-foreground">API Key</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Use Anthropic API key
+                      <p className="font-medium text-foreground">
+                        API Key verified!
                       </p>
-                      <p className="text-xs text-green-500 mt-2">Pay-per-use</p>
+                      <p className="text-sm text-muted-foreground">
+                        Your API key is working correctly.
+                      </p>
                     </div>
                   </div>
-                </button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                )}
 
-      {/* Success State */}
-      {isAuthenticated && (
-        <Card className="bg-green-500/5 border-green-500/20">
-          <CardContent className="py-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 text-green-500" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">
-                  Claude is ready to use!
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {getAuthMethodLabel() && `Using ${getAuthMethodLabel()}. `}You
-                  can proceed to the next step
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                {apiKeyVerificationStatus === "error" &&
+                  apiKeyVerificationError && (
+                    <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-medium text-foreground">
+                          Verification failed
+                        </p>
+                        <p className="text-sm text-red-400 mt-1">
+                          {apiKeyVerificationError}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                {/* API Key Verify Button */}
+                <Button
+                  onClick={verifyApiKeyAuth}
+                  disabled={
+                    apiKeyVerificationStatus === "verifying" || !hasApiKey
+                  }
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white"
+                  data-testid="verify-api-key-button"
+                >
+                  {apiKeyVerificationStatus === "verifying" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : apiKeyVerificationStatus === "error" ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Retry Verification
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4 mr-2" />
+                      Verify API Key
+                    </>
+                  )}
+                </Button>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
+      </Card>
 
       {/* Navigation */}
       <div className="flex justify-between pt-4">
@@ -582,7 +756,8 @@ export function ClaudeSetupStep({
           </Button>
           <Button
             onClick={onNext}
-            className="bg-brand-500 hover:bg-brand-600 text-white"
+            disabled={!isReady}
+            className="bg-brand-500 hover:bg-brand-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="claude-next-button"
           >
             Continue
@@ -590,13 +765,6 @@ export function ClaudeSetupStep({
           </Button>
         </div>
       </div>
-
-      {/* OAuth Setup Modal */}
-      <SetupTokenModal
-        open={showTokenModal}
-        onClose={() => setShowTokenModal(false)}
-        onTokenObtained={handleTokenFromModal}
-      />
     </div>
   );
 }

@@ -12,7 +12,7 @@ export interface CliStatus {
 
 // Claude Auth Method - all possible authentication sources
 export type ClaudeAuthMethod =
-  | "oauth_token_env" // CLAUDE_CODE_OAUTH_TOKEN environment variable
+  | "oauth_token_env"
   | "oauth_token" // Stored OAuth token from claude login
   | "api_key_env" // ANTHROPIC_API_KEY environment variable
   | "api_key" // Manually stored API key
@@ -65,6 +65,7 @@ export interface SetupState {
 export interface SetupActions {
   // Setup flow
   setCurrentStep: (step: SetupStep) => void;
+  setSetupComplete: (complete: boolean) => void;
   completeSetup: () => void;
   resetSetup: () => void;
   setIsFirstRun: (isFirstRun: boolean) => void;
@@ -108,6 +109,12 @@ export const useSetupStore = create<SetupState & SetupActions>()(
 
       // Setup flow
       setCurrentStep: (step) => set({ currentStep: step }),
+
+      setSetupComplete: (complete) =>
+        set({
+          setupComplete: complete,
+          currentStep: complete ? "complete" : "welcome",
+        }),
 
       completeSetup: () =>
         set({ setupComplete: true, currentStep: "complete" }),

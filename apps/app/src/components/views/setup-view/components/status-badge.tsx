@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 
 interface StatusBadgeProps {
   status:
@@ -6,7 +6,9 @@ interface StatusBadgeProps {
     | "not_installed"
     | "checking"
     | "authenticated"
-    | "not_authenticated";
+    | "not_authenticated"
+    | "error"
+    | "unverified";
   label: string;
 }
 
@@ -25,9 +27,19 @@ export function StatusBadge({ status, label }: StatusBadgeProps) {
           icon: <XCircle className="w-4 h-4" />,
           className: "bg-red-500/10 text-red-500 border-red-500/20",
         };
+      case "error":
+        return {
+          icon: <XCircle className="w-4 h-4" />,
+          className: "bg-red-500/10 text-red-500 border-red-500/20",
+        };
       case "checking":
         return {
           icon: <Loader2 className="w-4 h-4 animate-spin" />,
+          className: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+        };
+      case "unverified":
+        return {
+          icon: <AlertCircle className="w-4 h-4" />,
           className: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
         };
     }

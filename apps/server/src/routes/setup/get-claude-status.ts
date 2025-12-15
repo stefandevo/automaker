@@ -151,7 +151,7 @@ export async function getClaudeStatus() {
   if (auth.hasEnvOAuthToken) {
     auth.authenticated = true;
     auth.oauthTokenValid = true;
-    auth.method = "oauth_token_env"; // OAuth token from CLAUDE_CODE_OAUTH_TOKEN env var
+    auth.method = "oauth_token_env";
   } else if (auth.hasEnvApiKey) {
     auth.authenticated = true;
     auth.apiKeyValid = true;
