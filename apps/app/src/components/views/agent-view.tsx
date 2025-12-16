@@ -17,6 +17,7 @@ import {
   PanelLeft,
   Paperclip,
   X,
+  ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useElectronAgent } from "@/hooks/use-electron-agent";
@@ -30,7 +31,8 @@ import {
 } from "@/hooks/use-keyboard-shortcuts";
 
 export function AgentView() {
-  const { currentProject, setLastSelectedSession, getLastSelectedSession } = useAppStore();
+  const { currentProject, setLastSelectedSession, getLastSelectedSession } =
+    useAppStore();
   const shortcuts = useKeyboardShortcutsConfig();
   const [input, setInput] = useState("");
   const [selectedImages, setSelectedImages] = useState<ImageAttachment[]>([]);
@@ -71,13 +73,16 @@ export function AgentView() {
   });
 
   // Handle session selection with persistence
-  const handleSelectSession = useCallback((sessionId: string | null) => {
-    setCurrentSessionId(sessionId);
-    // Persist the selection for this project
-    if (currentProject?.path) {
-      setLastSelectedSession(currentProject.path, sessionId);
-    }
-  }, [currentProject?.path, setLastSelectedSession]);
+  const handleSelectSession = useCallback(
+    (sessionId: string | null) => {
+      setCurrentSessionId(sessionId);
+      // Persist the selection for this project
+      if (currentProject?.path) {
+        setLastSelectedSession(currentProject.path, sessionId);
+      }
+    },
+    [currentProject?.path, setLastSelectedSession]
+  );
 
   // Restore last selected session when switching to Agent view or when project changes
   useEffect(() => {
@@ -94,7 +99,10 @@ export function AgentView() {
 
     const lastSessionId = getLastSelectedSession(currentProject.path);
     if (lastSessionId) {
-      console.log("[AgentView] Restoring last selected session:", lastSessionId);
+      console.log(
+        "[AgentView] Restoring last selected session:",
+        lastSessionId
+      );
       setCurrentSessionId(lastSessionId);
     }
   }, [currentProject?.path, getLastSelectedSession]);
@@ -417,7 +425,9 @@ export function AgentView() {
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
             <Sparkles className="w-8 h-8 text-primary" />
           </div>
-          <h2 className="text-xl font-semibold mb-3 text-foreground">No Project Selected</h2>
+          <h2 className="text-xl font-semibold mb-3 text-foreground">
+            No Project Selected
+          </h2>
           <p className="text-muted-foreground leading-relaxed">
             Open or create a project to start working with the AI agent.
           </p>
@@ -479,7 +489,9 @@ export function AgentView() {
               <Bot className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-foreground">AI Agent</h1>
+              <h1 className="text-lg font-semibold text-foreground">
+                AI Agent
+              </h1>
               <p className="text-sm text-muted-foreground">
                 {currentProject.name}
                 {currentSessionId && !isConnected && " - Connecting..."}
@@ -496,7 +508,9 @@ export function AgentView() {
               </div>
             )}
             {agentError && (
-              <span className="text-xs text-destructive font-medium">{agentError}</span>
+              <span className="text-xs text-destructive font-medium">
+                {agentError}
+              </span>
             )}
             {currentSessionId && messages.length > 0 && (
               <Button
@@ -588,6 +602,50 @@ export function AgentView() {
                       {message.content}
                     </p>
                   )}
+
+                  {/* Display attached images for user messages */}
+                  {message.role === "user" &&
+                    message.images &&
+                    message.images.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
+                          <ImageIcon className="w-3 h-3" />
+                          <span>
+                            {message.images.length} image
+                            {message.images.length > 1 ? "s" : ""} attached
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {message.images.map((image, index) => {
+                            // Construct proper data URL from base64 data and mime type
+                            const dataUrl = image.data.startsWith("data:")
+                              ? image.data
+                              : `data:${image.mimeType || "image/png"};base64,${
+                                  image.data
+                                }`;
+                            return (
+                              <div
+                                key={image.id || `img-${index}`}
+                                className="relative group rounded-lg overflow-hidden border border-primary-foreground/20 bg-primary-foreground/10"
+                              >
+                                <img
+                                  src={dataUrl}
+                                  alt={
+                                    image.filename ||
+                                    `Attached image ${index + 1}`
+                                  }
+                                  className="w-20 h-20 object-cover hover:opacity-90 transition-opacity"
+                                />
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-0.5 text-[9px] text-white truncate">
+                                  {image.filename || `Image ${index + 1}`}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                   <p
                     className={cn(
                       "text-[11px] mt-2 font-medium",
@@ -614,9 +672,18 @@ export function AgentView() {
                 <div className="bg-card border border-border rounded-2xl px-4 py-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: "0ms" }} />
-                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: "150ms" }} />
-                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: "300ms" }} />
+                      <span
+                        className="w-2 h-2 rounded-full bg-primary animate-pulse"
+                        style={{ animationDelay: "0ms" }}
+                      />
+                      <span
+                        className="w-2 h-2 rounded-full bg-primary animate-pulse"
+                        style={{ animationDelay: "150ms" }}
+                      />
+                      <span
+                        className="w-2 h-2 rounded-full bg-primary animate-pulse"
+                        style={{ animationDelay: "300ms" }}
+                      />
                     </div>
                     <span className="text-sm text-muted-foreground">
                       Thinking...
@@ -677,18 +744,22 @@ export function AgentView() {
                         <p className="text-xs font-medium text-foreground truncate max-w-24">
                           {image.filename}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {formatFileSize(image.size)}
-                        </p>
+                        {image.size !== undefined && (
+                          <p className="text-[10px] text-muted-foreground">
+                            {formatFileSize(image.size)}
+                          </p>
+                        )}
                       </div>
                       {/* Remove button */}
-                      <button
-                        onClick={() => removeImage(image.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                        disabled={isProcessing}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      {image.id && (
+                        <button
+                          onClick={() => removeImage(image.id!)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                          disabled={isProcessing}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -729,7 +800,8 @@ export function AgentView() {
                 />
                 {selectedImages.length > 0 && !isDragOver && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium">
-                    {selectedImages.length} image{selectedImages.length > 1 ? "s" : ""}
+                    {selectedImages.length} image
+                    {selectedImages.length > 1 ? "s" : ""}
                   </div>
                 )}
                 {isDragOver && (
@@ -748,7 +820,8 @@ export function AgentView() {
                 disabled={isProcessing || !isConnected}
                 className={cn(
                   "h-11 w-11 rounded-xl border-border",
-                  showImageDropZone && "bg-primary/10 text-primary border-primary/30",
+                  showImageDropZone &&
+                    "bg-primary/10 text-primary border-primary/30",
                   selectedImages.length > 0 && "border-primary/30 text-primary"
                 )}
                 title="Attach images"
@@ -773,7 +846,11 @@ export function AgentView() {
 
             {/* Keyboard hint */}
             <p className="text-[11px] text-muted-foreground mt-2 text-center">
-              Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-medium">Enter</kbd> to send
+              Press{" "}
+              <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-medium">
+                Enter
+              </kbd>{" "}
+              to send
             </p>
           </div>
         )}
