@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -6,13 +6,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { HotkeyButton } from "@/components/ui/hotkey-button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { HotkeyButton } from '@/components/ui/hotkey-button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import {
   FolderPlus,
   FolderOpen,
@@ -22,15 +22,12 @@ import {
   Loader2,
   Link,
   Folder,
-} from "lucide-react";
-import { starterTemplates, type StarterTemplate } from "@/lib/templates";
-import { getElectronAPI } from "@/lib/electron";
-import { cn } from "@/lib/utils";
-import { useFileBrowser } from "@/contexts/file-browser-context";
-import {
-  getDefaultWorkspaceDirectory,
-  saveLastProjectDirectory,
-} from "@/lib/workspace-config";
+} from 'lucide-react';
+import { starterTemplates, type StarterTemplate } from '@/lib/templates';
+import { getElectronAPI } from '@/lib/electron';
+import { cn } from '@/lib/utils';
+import { useFileBrowser } from '@/contexts/file-browser-context';
+import { getDefaultWorkspaceDirectory, saveLastProjectDirectory } from '@/lib/workspace-config';
 
 interface ValidationErrors {
   projectName?: boolean;
@@ -42,20 +39,13 @@ interface ValidationErrors {
 interface NewProjectModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreateBlankProject: (
-    projectName: string,
-    parentDir: string
-  ) => Promise<void>;
+  onCreateBlankProject: (projectName: string, parentDir: string) => Promise<void>;
   onCreateFromTemplate: (
     template: StarterTemplate,
     projectName: string,
     parentDir: string
   ) => Promise<void>;
-  onCreateFromCustomUrl: (
-    repoUrl: string,
-    projectName: string,
-    parentDir: string
-  ) => Promise<void>;
+  onCreateFromCustomUrl: (repoUrl: string, projectName: string, parentDir: string) => Promise<void>;
   isCreating: boolean;
 }
 
@@ -67,14 +57,13 @@ export function NewProjectModal({
   onCreateFromCustomUrl,
   isCreating,
 }: NewProjectModalProps) {
-  const [activeTab, setActiveTab] = useState<"blank" | "template">("blank");
-  const [projectName, setProjectName] = useState("");
-  const [workspaceDir, setWorkspaceDir] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<'blank' | 'template'>('blank');
+  const [projectName, setProjectName] = useState('');
+  const [workspaceDir, setWorkspaceDir] = useState<string>('');
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] =
-    useState<StarterTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<StarterTemplate | null>(null);
   const [useCustomUrl, setUseCustomUrl] = useState(false);
-  const [customUrl, setCustomUrl] = useState("");
+  const [customUrl, setCustomUrl] = useState('');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const { openFileBrowser } = useFileBrowser();
 
@@ -89,7 +78,7 @@ export function NewProjectModal({
           }
         })
         .catch((error) => {
-          console.error("Failed to get default workspace directory:", error);
+          console.error('Failed to get default workspace directory:', error);
         })
         .finally(() => {
           setIsLoadingWorkspace(false);
@@ -100,11 +89,11 @@ export function NewProjectModal({
   // Reset form when modal closes
   useEffect(() => {
     if (!open) {
-      setProjectName("");
+      setProjectName('');
       setSelectedTemplate(null);
       setUseCustomUrl(false);
-      setCustomUrl("");
-      setActiveTab("blank");
+      setCustomUrl('');
+      setActiveTab('blank');
       setErrors({});
     }
   }, [open]);
@@ -117,10 +106,7 @@ export function NewProjectModal({
   }, [projectName, errors.projectName]);
 
   useEffect(() => {
-    if (
-      (selectedTemplate || (useCustomUrl && customUrl)) &&
-      errors.templateSelection
-    ) {
+    if ((selectedTemplate || (useCustomUrl && customUrl)) && errors.templateSelection) {
       setErrors((prev) => ({ ...prev, templateSelection: false }));
     }
   }, [selectedTemplate, useCustomUrl, customUrl, errors.templateSelection]);
@@ -145,7 +131,7 @@ export function NewProjectModal({
     }
 
     // Check template selection (only for template tab)
-    if (activeTab === "template") {
+    if (activeTab === 'template') {
       if (useCustomUrl) {
         if (!customUrl.trim()) {
           newErrors.customUrl = true;
@@ -164,7 +150,7 @@ export function NewProjectModal({
     // Clear errors and proceed
     setErrors({});
 
-    if (activeTab === "blank") {
+    if (activeTab === 'blank') {
       await onCreateBlankProject(projectName, workspaceDir);
     } else if (useCustomUrl && customUrl) {
       await onCreateFromCustomUrl(customUrl, projectName, workspaceDir);
@@ -181,7 +167,7 @@ export function NewProjectModal({
   const handleSelectTemplate = (template: StarterTemplate) => {
     setSelectedTemplate(template);
     setUseCustomUrl(false);
-    setCustomUrl("");
+    setCustomUrl('');
   };
 
   const handleToggleCustomUrl = () => {
@@ -193,9 +179,8 @@ export function NewProjectModal({
 
   const handleBrowseDirectory = async () => {
     const selectedPath = await openFileBrowser({
-      title: "Select Base Project Directory",
-      description:
-        "Choose the parent directory where your project will be created",
+      title: 'Select Base Project Directory',
+      description: 'Choose the parent directory where your project will be created',
       initialPath: workspaceDir || undefined,
     });
     if (selectedPath) {
@@ -211,15 +196,12 @@ export function NewProjectModal({
 
   // Use platform-specific path separator
   const pathSep =
-    typeof window !== "undefined" && (window as any).electronAPI
-      ? navigator.platform.indexOf("Win") !== -1
-        ? "\\"
-        : "/"
-      : "/";
-  const projectPath =
-    workspaceDir && projectName
-      ? `${workspaceDir}${pathSep}${projectName}`
-      : "";
+    typeof window !== 'undefined' && (window as any).electronAPI
+      ? navigator.platform.indexOf('Win') !== -1
+        ? '\\'
+        : '/'
+      : '/';
+  const projectPath = workspaceDir && projectName ? `${workspaceDir}${pathSep}${projectName}` : '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -228,9 +210,7 @@ export function NewProjectModal({
         data-testid="new-project-modal"
       >
         <DialogHeader className="pb-2">
-          <DialogTitle className="text-foreground">
-            Create New Project
-          </DialogTitle>
+          <DialogTitle className="text-foreground">Create New Project</DialogTitle>
           <DialogDescription className="text-muted-foreground">
             Start with a blank project or choose from a starter template.
           </DialogDescription>
@@ -241,13 +221,9 @@ export function NewProjectModal({
           <div className="space-y-2">
             <Label
               htmlFor="project-name"
-              className={cn(
-                "text-foreground",
-                errors.projectName && "text-red-500"
-              )}
+              className={cn('text-foreground', errors.projectName && 'text-red-500')}
             >
-              Project Name{" "}
-              {errors.projectName && <span className="text-red-500">*</span>}
+              Project Name {errors.projectName && <span className="text-red-500">*</span>}
             </Label>
             <Input
               id="project-name"
@@ -255,33 +231,31 @@ export function NewProjectModal({
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               className={cn(
-                "bg-input text-foreground placeholder:text-muted-foreground",
+                'bg-input text-foreground placeholder:text-muted-foreground',
                 errors.projectName
-                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                  : "border-border"
+                  ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                  : 'border-border'
               )}
               data-testid="project-name-input"
               autoFocus
             />
-            {errors.projectName && (
-              <p className="text-xs text-red-500">Project name is required</p>
-            )}
+            {errors.projectName && <p className="text-xs text-red-500">Project name is required</p>}
           </div>
 
           {/* Workspace Directory Display */}
           <div
             className={cn(
-              "flex items-center gap-2 text-sm",
-              errors.workspaceDir ? "text-red-500" : "text-muted-foreground"
+              'flex items-center gap-2 text-sm',
+              errors.workspaceDir ? 'text-red-500' : 'text-muted-foreground'
             )}
           >
             <Folder className="w-4 h-4 shrink-0" />
             <span className="flex-1 min-w-0">
               {isLoadingWorkspace ? (
-                "Loading workspace..."
+                'Loading workspace...'
               ) : workspaceDir ? (
                 <>
-                  Will be created at:{" "}
+                  Will be created at:{' '}
                   <code className="text-xs bg-muted px-1.5 py-0.5 rounded truncate">
                     {projectPath || workspaceDir}
                   </code>
@@ -305,7 +279,7 @@ export function NewProjectModal({
 
         <Tabs
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as "blank" | "template")}
+          onValueChange={(v) => setActiveTab(v as 'blank' | 'template')}
           className="flex-1 flex flex-col overflow-hidden"
         >
           <TabsList className="w-full justify-start">
@@ -323,9 +297,8 @@ export function NewProjectModal({
             <TabsContent value="blank" className="mt-0">
               <div className="p-4 rounded-lg bg-muted/50 border border-border">
                 <p className="text-sm text-muted-foreground">
-                  Create an empty project with the standard .automaker directory
-                  structure. Perfect for starting from scratch or importing an
-                  existing codebase.
+                  Create an empty project with the standard .automaker directory structure. Perfect
+                  for starting from scratch or importing an existing codebase.
                 </p>
               </div>
             </TabsContent>
@@ -342,18 +315,18 @@ export function NewProjectModal({
                 {/* Preset Templates */}
                 <div
                   className={cn(
-                    "space-y-3 rounded-lg p-1 -m-1",
-                    errors.templateSelection && "ring-2 ring-red-500/50"
+                    'space-y-3 rounded-lg p-1 -m-1',
+                    errors.templateSelection && 'ring-2 ring-red-500/50'
                   )}
                 >
                   {starterTemplates.map((template) => (
                     <div
                       key={template.id}
                       className={cn(
-                        "p-4 rounded-lg border cursor-pointer transition-all",
+                        'p-4 rounded-lg border cursor-pointer transition-all',
                         selectedTemplate?.id === template.id && !useCustomUrl
-                          ? "border-brand-500 bg-brand-500/10"
-                          : "border-border bg-muted/30 hover:border-border-glass hover:bg-muted/50"
+                          ? 'border-brand-500 bg-brand-500/10'
+                          : 'border-border bg-muted/30 hover:border-border-glass hover:bg-muted/50'
                       )}
                       onClick={() => handleSelectTemplate(template)}
                       data-testid={`template-${template.id}`}
@@ -361,13 +334,10 @@ export function NewProjectModal({
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium text-foreground">
-                              {template.name}
-                            </h4>
-                            {selectedTemplate?.id === template.id &&
-                              !useCustomUrl && (
-                                <Check className="w-4 h-4 text-brand-500" />
-                              )}
+                            <h4 className="font-medium text-foreground">{template.name}</h4>
+                            {selectedTemplate?.id === template.id && !useCustomUrl && (
+                              <Check className="w-4 h-4 text-brand-500" />
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground mb-3">
                             {template.description}
@@ -376,11 +346,7 @@ export function NewProjectModal({
                           {/* Tech Stack */}
                           <div className="flex flex-wrap gap-1.5 mb-3">
                             {template.techStack.slice(0, 6).map((tech) => (
-                              <Badge
-                                key={tech}
-                                variant="secondary"
-                                className="text-xs"
-                              >
+                              <Badge key={tech} variant="secondary" className="text-xs">
                                 {tech}
                               </Badge>
                             ))}
@@ -394,7 +360,7 @@ export function NewProjectModal({
                           {/* Key Features */}
                           <div className="text-xs text-muted-foreground">
                             <span className="font-medium">Features: </span>
-                            {template.features.slice(0, 3).join(" · ")}
+                            {template.features.slice(0, 3).join(' · ')}
                             {template.features.length > 3 &&
                               ` · +${template.features.length - 3} more`}
                           </div>
@@ -419,47 +385,38 @@ export function NewProjectModal({
                   {/* Custom URL Option */}
                   <div
                     className={cn(
-                      "p-4 rounded-lg border cursor-pointer transition-all",
+                      'p-4 rounded-lg border cursor-pointer transition-all',
                       useCustomUrl
-                        ? "border-brand-500 bg-brand-500/10"
-                        : "border-border bg-muted/30 hover:border-border-glass hover:bg-muted/50"
+                        ? 'border-brand-500 bg-brand-500/10'
+                        : 'border-border bg-muted/30 hover:border-border-glass hover:bg-muted/50'
                     )}
                     onClick={handleToggleCustomUrl}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <Link className="w-4 h-4 text-muted-foreground" />
-                      <h4 className="font-medium text-foreground">
-                        Custom GitHub URL
-                      </h4>
-                      {useCustomUrl && (
-                        <Check className="w-4 h-4 text-brand-500" />
-                      )}
+                      <h4 className="font-medium text-foreground">Custom GitHub URL</h4>
+                      {useCustomUrl && <Check className="w-4 h-4 text-brand-500" />}
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">
                       Clone any public GitHub repository as a starting point.
                     </p>
 
                     {useCustomUrl && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="space-y-1"
-                      >
+                      <div onClick={(e) => e.stopPropagation()} className="space-y-1">
                         <Input
                           placeholder="https://github.com/username/repository"
                           value={customUrl}
                           onChange={(e) => setCustomUrl(e.target.value)}
                           className={cn(
-                            "bg-input text-foreground placeholder:text-muted-foreground",
+                            'bg-input text-foreground placeholder:text-muted-foreground',
                             errors.customUrl
-                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                              : "border-border"
+                              ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                              : 'border-border'
                           )}
                           data-testid="custom-url-input"
                         />
                         {errors.customUrl && (
-                          <p className="text-xs text-red-500">
-                            GitHub URL is required
-                          </p>
+                          <p className="text-xs text-red-500">GitHub URL is required</p>
                         )}
                       </div>
                     )}
@@ -482,14 +439,14 @@ export function NewProjectModal({
             onClick={validateAndCreate}
             disabled={isCreating}
             className="bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-600 text-white border-0"
-            hotkey={{ key: "Enter", cmdCtrl: true }}
+            hotkey={{ key: 'Enter', cmdCtrl: true }}
             hotkeyActive={open}
             data-testid="confirm-create-project"
           >
             {isCreating ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {activeTab === "template" ? "Cloning..." : "Creating..."}
+                {activeTab === 'template' ? 'Cloning...' : 'Creating...'}
               </>
             ) : (
               <>Create Project</>

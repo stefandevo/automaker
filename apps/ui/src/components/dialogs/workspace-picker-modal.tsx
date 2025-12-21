@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Folder, Loader2, FolderOpen, AlertCircle } from "lucide-react";
-import { getHttpApiClient } from "@/lib/http-api-client";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Folder, Loader2, FolderOpen, AlertCircle } from 'lucide-react';
+import { getHttpApiClient } from '@/lib/http-api-client';
 
 interface WorkspaceDirectory {
   name: string;
@@ -23,11 +22,7 @@ interface WorkspacePickerModalProps {
   onSelect: (path: string, name: string) => void;
 }
 
-export function WorkspacePickerModal({
-  open,
-  onOpenChange,
-  onSelect,
-}: WorkspacePickerModalProps) {
+export function WorkspacePickerModal({ open, onOpenChange, onSelect }: WorkspacePickerModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [directories, setDirectories] = useState<WorkspaceDirectory[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -43,10 +38,10 @@ export function WorkspacePickerModal({
       if (result.success && result.directories) {
         setDirectories(result.directories);
       } else {
-        setError(result.error || "Failed to load directories");
+        setError(result.error || 'Failed to load directories');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load directories");
+      setError(err instanceof Error ? err.message : 'Failed to load directories');
     } finally {
       setIsLoading(false);
     }
@@ -90,12 +85,7 @@ export function WorkspacePickerModal({
                 <AlertCircle className="w-6 h-6 text-destructive" />
               </div>
               <p className="text-sm text-destructive">{error}</p>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={loadDirectories}
-                className="mt-2"
-              >
+              <Button variant="secondary" size="sm" onClick={loadDirectories} className="mt-2">
                 Try Again
               </Button>
             </div>
@@ -128,9 +118,7 @@ export function WorkspacePickerModal({
                     <p className="font-medium text-foreground truncate group-hover:text-brand-500 transition-colors">
                       {dir.name}
                     </p>
-                    <p className="text-xs text-muted-foreground/70 truncate">
-                      {dir.path}
-                    </p>
+                    <p className="text-xs text-muted-foreground/70 truncate">{dir.path}</p>
                   </div>
                 </button>
               ))}

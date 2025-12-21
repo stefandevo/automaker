@@ -72,7 +72,7 @@ import { toast } from 'sonner';
 import { themeOptions } from '@/config/theme-options';
 import type { SpecRegenerationEvent } from '@/types/electron';
 import { DeleteProjectDialog } from '@/components/views/settings-view/components/delete-project-dialog';
-import { NewProjectModal } from '@/components/new-project-modal';
+import { NewProjectModal } from '@/components/dialogs/new-project-modal';
 import { CreateSpecDialog } from '@/components/views/spec-view/dialogs';
 import type { FeatureCount } from '@/components/views/spec-view/types';
 import {
