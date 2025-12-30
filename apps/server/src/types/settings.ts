@@ -22,6 +22,8 @@ export type {
   BoardBackgroundSettings,
   WorktreeInfo,
   ProjectSettings,
+  PhaseModelConfig,
+  PhaseModelKey,
 } from '@automaker/types';
 
 export {
@@ -29,6 +31,7 @@ export {
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_CREDENTIALS,
   DEFAULT_PROJECT_SETTINGS,
+  DEFAULT_PHASE_MODELS,
   SETTINGS_VERSION,
   CREDENTIALS_VERSION,
   PROJECT_SETTINGS_VERSION,

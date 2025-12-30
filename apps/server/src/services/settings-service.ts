@@ -27,11 +27,13 @@ import type {
   TrashedProjectRef,
   BoardBackgroundSettings,
   WorktreeInfo,
+  PhaseModelConfig,
 } from '../types/settings.js';
 import {
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_CREDENTIALS,
   DEFAULT_PROJECT_SETTINGS,
+  DEFAULT_PHASE_MODELS,
   SETTINGS_VERSION,
   CREDENTIALS_VERSION,
   PROJECT_SETTINGS_VERSION,
@@ -130,6 +132,9 @@ export class SettingsService {
     const settingsPath = getGlobalSettingsPath(this.dataDir);
     const settings = await readJsonFile<GlobalSettings>(settingsPath, DEFAULT_GLOBAL_SETTINGS);
 
+    // Migrate legacy enhancementModel/validationModel to phaseModels
+    const migratedPhaseModels = this.migratePhaseModels(settings);
+
     // Apply any missing defaults (for backwards compatibility)
     return {
       ...DEFAULT_GLOBAL_SETTINGS,
@@ -138,7 +143,43 @@ export class SettingsService {
         ...DEFAULT_GLOBAL_SETTINGS.keyboardShortcuts,
         ...settings.keyboardShortcuts,
       },
+      phaseModels: migratedPhaseModels,
     };
+  }
+
+  /**
+   * Migrate legacy enhancementModel/validationModel fields to phaseModels structure
+   *
+   * Handles backwards compatibility for settings created before phaseModels existed.
+   * Legacy fields take precedence over defaults but phaseModels takes precedence over legacy.
+   *
+   * @param settings - Raw settings from file
+   * @returns Complete PhaseModelConfig with all fields populated
+   */
+  private migratePhaseModels(settings: Partial<GlobalSettings>): PhaseModelConfig {
+    // Start with defaults
+    const result: PhaseModelConfig = { ...DEFAULT_PHASE_MODELS };
+
+    // If phaseModels exists, use it (with defaults for any missing fields)
+    if (settings.phaseModels) {
+      return {
+        ...DEFAULT_PHASE_MODELS,
+        ...settings.phaseModels,
+      };
+    }
+
+    // Migrate legacy fields if phaseModels doesn't exist
+    // These were the only two legacy fields that existed
+    if (settings.enhancementModel) {
+      result.enhancementModel = settings.enhancementModel;
+      logger.debug(`Migrated legacy enhancementModel: ${settings.enhancementModel}`);
+    }
+    if (settings.validationModel) {
+      result.validationModel = settings.validationModel;
+      logger.debug(`Migrated legacy validationModel: ${settings.validationModel}`);
+    }
+
+    return result;
   }
 
   /**
@@ -166,6 +207,14 @@ export class SettingsService {
       updated.keyboardShortcuts = {
         ...current.keyboardShortcuts,
         ...updates.keyboardShortcuts,
+      };
+    }
+
+    // Deep merge phaseModels if provided
+    if (updates.phaseModels) {
+      updated.phaseModels = {
+        ...current.phaseModels,
+        ...updates.phaseModels,
       };
     }
 
