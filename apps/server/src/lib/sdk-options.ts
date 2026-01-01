@@ -147,15 +147,15 @@ export function checkSandboxCompatibility(
   cwd: string,
   enableSandboxMode?: boolean
 ): SandboxCheckResult {
-  // User has disabled sandbox mode
-  if (!enableSandboxMode) {
+  // User has explicitly disabled sandbox mode
+  if (enableSandboxMode === false) {
     return {
       enabled: false,
       disabledReason: 'user_setting',
     };
   }
 
-  // Check for cloud storage incompatibility
+  // Check for cloud storage incompatibility (applies when enabled or undefined)
   if (isCloudStoragePath(cwd)) {
     return {
       enabled: false,
@@ -164,7 +164,7 @@ export function checkSandboxCompatibility(
     };
   }
 
-  // Sandbox is compatible and enabled
+  // Sandbox is compatible and enabled (true or undefined defaults to enabled)
   return {
     enabled: true,
   };

@@ -140,11 +140,21 @@ describe('sdk-options.ts', () => {
       expect(result.disabledReason).toBeUndefined();
     });
 
-    it('should return enabled=false when enableSandboxMode is undefined', async () => {
+    it('should return enabled=true when enableSandboxMode is undefined for local paths', async () => {
       const { checkSandboxCompatibility } = await import('@/lib/sdk-options.js');
       const result = checkSandboxCompatibility('/Users/test/project', undefined);
+      expect(result.enabled).toBe(true);
+      expect(result.disabledReason).toBeUndefined();
+    });
+
+    it('should return enabled=false for cloud storage paths when enableSandboxMode is undefined', async () => {
+      const { checkSandboxCompatibility } = await import('@/lib/sdk-options.js');
+      const result = checkSandboxCompatibility(
+        '/Users/test/Library/CloudStorage/Dropbox-Personal/project',
+        undefined
+      );
       expect(result.enabled).toBe(false);
-      expect(result.disabledReason).toBe('user_setting');
+      expect(result.disabledReason).toBe('cloud_storage');
     });
   });
 
@@ -360,14 +370,17 @@ describe('sdk-options.ts', () => {
       expect(options.sandbox).toBeUndefined();
     });
 
-    it('should not set sandbox when enableSandboxMode is not provided', async () => {
+    it('should enable sandbox by default when enableSandboxMode is not provided', async () => {
       const { createChatOptions } = await import('@/lib/sdk-options.js');
 
       const options = createChatOptions({
         cwd: '/test/path',
       });
 
-      expect(options.sandbox).toBeUndefined();
+      expect(options.sandbox).toEqual({
+        enabled: true,
+        autoAllowBashIfSandboxed: true,
+      });
     });
 
     it('should auto-disable sandbox for cloud storage paths', async () => {
@@ -432,14 +445,17 @@ describe('sdk-options.ts', () => {
       expect(options.sandbox).toBeUndefined();
     });
 
-    it('should not set sandbox when enableSandboxMode is not provided', async () => {
+    it('should enable sandbox by default when enableSandboxMode is not provided', async () => {
       const { createAutoModeOptions } = await import('@/lib/sdk-options.js');
 
       const options = createAutoModeOptions({
         cwd: '/test/path',
       });
 
-      expect(options.sandbox).toBeUndefined();
+      expect(options.sandbox).toEqual({
+        enabled: true,
+        autoAllowBashIfSandboxed: true,
+      });
     });
 
     it('should auto-disable sandbox for cloud storage paths', async () => {
@@ -448,6 +464,16 @@ describe('sdk-options.ts', () => {
       const options = createAutoModeOptions({
         cwd: '/Users/test/Library/CloudStorage/Dropbox-Personal/project',
         enableSandboxMode: true,
+      });
+
+      expect(options.sandbox).toBeUndefined();
+    });
+
+    it('should auto-disable sandbox for cloud storage paths even when enableSandboxMode is not provided', async () => {
+      const { createAutoModeOptions } = await import('@/lib/sdk-options.js');
+
+      const options = createAutoModeOptions({
+        cwd: '/Users/test/Library/CloudStorage/Dropbox-Personal/project',
       });
 
       expect(options.sandbox).toBeUndefined();
