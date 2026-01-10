@@ -382,9 +382,11 @@ export class OpencodeProvider extends CliProvider {
           result.session_id = finishEvent.sessionID;
         }
 
-        // Include result text if provided
-        if (finishEvent.part?.result) {
-          result.result = finishEvent.part.result;
+        // Safely handle arbitrary result payloads from CLI: ensure we assign a string.
+        const rawResult =
+          (finishEvent.part && (finishEvent.part as Record<string, unknown>).result) ?? undefined;
+        if (rawResult !== undefined) {
+          result.result = typeof rawResult === 'string' ? rawResult : JSON.stringify(rawResult);
         }
 
         return result;
