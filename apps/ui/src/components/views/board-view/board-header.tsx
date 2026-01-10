@@ -1,11 +1,9 @@
 import { useState, useCallback } from 'react';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Plus, Bot, Wand2, Settings2, GitBranch } from 'lucide-react';
-import { KeyboardShortcut } from '@/hooks/use-keyboard-shortcuts';
+import { Bot, Wand2, Settings2, GitBranch } from 'lucide-react';
 import { UsagePopover } from '@/components/usage-popover';
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
@@ -20,9 +18,7 @@ interface BoardHeaderProps {
   onConcurrencyChange: (value: number) => void;
   isAutoModeRunning: boolean;
   onAutoModeToggle: (enabled: boolean) => void;
-  onAddFeature: () => void;
   onOpenPlanDialog: () => void;
-  addFeatureShortcut: KeyboardShortcut;
   isMounted: boolean;
 }
 
@@ -38,9 +34,7 @@ export function BoardHeader({
   onConcurrencyChange,
   isAutoModeRunning,
   onAutoModeToggle,
-  onAddFeature,
   onOpenPlanDialog,
-  addFeatureShortcut,
   isMounted,
 }: BoardHeaderProps) {
   const [showAutoModeSettings, setShowAutoModeSettings] = useState(false);
@@ -176,17 +170,6 @@ export function BoardHeader({
           <Wand2 className="w-4 h-4 mr-2" />
           Plan
         </Button>
-
-        <HotkeyButton
-          size="sm"
-          onClick={onAddFeature}
-          hotkey={addFeatureShortcut}
-          hotkeyActive={false}
-          data-testid="add-feature-button"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Feature
-        </HotkeyButton>
       </div>
     </div>
   );

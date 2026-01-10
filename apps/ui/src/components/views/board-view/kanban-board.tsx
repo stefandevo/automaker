@@ -4,7 +4,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Button } from '@/components/ui/button';
 import { KanbanColumn, KanbanCard } from './components';
 import { Feature } from '@/store/app-store';
-import { Archive, Settings2, CheckSquare, GripVertical } from 'lucide-react';
+import { Archive, Settings2, CheckSquare, GripVertical, Plus } from 'lucide-react';
 import { useResponsiveKanban } from '@/hooks/use-responsive-kanban';
 import { getColumnsWithPipeline, type ColumnId } from './constants';
 import type { PipelineConfig } from '@automaker/types';
@@ -43,6 +43,7 @@ interface KanbanBoardProps {
   featuresWithContext: Set<string>;
   runningAutoTasks: string[];
   onArchiveAllVerified: () => void;
+  onAddFeature: () => void;
   pipelineConfig: PipelineConfig | null;
   onOpenPipelineSettings?: () => void;
   // Selection mode props
@@ -78,6 +79,7 @@ export function KanbanBoard({
   featuresWithContext,
   runningAutoTasks,
   onArchiveAllVerified,
+  onAddFeature,
   pipelineConfig,
   onOpenPipelineSettings,
   isSelectionMode = false,
@@ -127,26 +129,38 @@ export function KanbanBoard({
                       Complete All
                     </Button>
                   ) : column.id === 'backlog' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`h-6 px-2 text-xs ${isSelectionMode ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground'}`}
-                      onClick={onToggleSelectionMode}
-                      title={isSelectionMode ? 'Switch to Drag Mode' : 'Select Multiple'}
-                      data-testid="selection-mode-button"
-                    >
-                      {isSelectionMode ? (
-                        <>
-                          <GripVertical className="w-3.5 h-3.5 mr-1" />
-                          Drag
-                        </>
-                      ) : (
-                        <>
-                          <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                          Select
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={onAddFeature}
+                        title="Add Feature"
+                        data-testid="add-feature-button"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-6 px-2 text-xs ${isSelectionMode ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={onToggleSelectionMode}
+                        title={isSelectionMode ? 'Switch to Drag Mode' : 'Select Multiple'}
+                        data-testid="selection-mode-button"
+                      >
+                        {isSelectionMode ? (
+                          <>
+                            <GripVertical className="w-3.5 h-3.5 mr-1" />
+                            Drag
+                          </>
+                        ) : (
+                          <>
+                            <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                            Select
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   ) : column.id === 'in_progress' ? (
                     <Button
                       variant="ghost"
@@ -168,6 +182,20 @@ export function KanbanBoard({
                       data-testid="edit-pipeline-step-button"
                     >
                       <Settings2 className="w-3.5 h-3.5" />
+                    </Button>
+                  ) : undefined
+                }
+                footerAction={
+                  column.id === 'backlog' ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full h-9 text-sm"
+                      onClick={onAddFeature}
+                      data-testid="add-feature-floating-button"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Feature
                     </Button>
                   ) : undefined
                 }

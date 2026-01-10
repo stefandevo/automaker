@@ -1153,13 +1153,7 @@ export function BoardView() {
             autoMode.stop();
           }
         }}
-        onAddFeature={() => setShowAddDialog(true)}
         onOpenPlanDialog={() => setShowPlanDialog(true)}
-        addFeatureShortcut={{
-          key: shortcuts.addFeature,
-          action: () => setShowAddDialog(true),
-          description: 'Add new feature',
-        }}
         isMounted={isMounted}
       />
 
@@ -1252,6 +1246,7 @@ export function BoardView() {
             featuresWithContext={featuresWithContext}
             runningAutoTasks={runningAutoTasks}
             onArchiveAllVerified={() => setShowArchiveAllVerifiedDialog(true)}
+            onAddFeature={() => setShowAddDialog(true)}
             pipelineConfig={
               currentProject?.path ? pipelineConfigByProject[currentProject.path] || null : null
             }
