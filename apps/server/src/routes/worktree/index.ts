@@ -17,6 +17,7 @@ import { createDeleteHandler } from './routes/delete.js';
 import { createCreatePRHandler } from './routes/create-pr.js';
 import { createPRInfoHandler } from './routes/pr-info.js';
 import { createCommitHandler } from './routes/commit.js';
+import { createGenerateCommitMessageHandler } from './routes/generate-commit-message.js';
 import { createPushHandler } from './routes/push.js';
 import { createPullHandler } from './routes/pull.js';
 import { createCheckoutBranchHandler } from './routes/checkout-branch.js';
@@ -63,6 +64,12 @@ export function createWorktreeRoutes(events: EventEmitter): Router {
     validatePathParams('worktreePath'),
     requireGitRepoOnly,
     createCommitHandler()
+  );
+  router.post(
+    '/generate-commit-message',
+    validatePathParams('worktreePath'),
+    requireGitRepoOnly,
+    createGenerateCommitMessageHandler()
   );
   router.post(
     '/push',

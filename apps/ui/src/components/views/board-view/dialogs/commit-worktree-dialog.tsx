@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { GitCommit, Loader2 } from 'lucide-react';
+import { GitCommit, Loader2, Sparkles } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
 
@@ -37,6 +37,7 @@ export function CommitWorktreeDialog({
 }: CommitWorktreeDialogProps) {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleCommit = async () => {
@@ -82,6 +83,45 @@ export function CommitWorktreeDialog({
     }
   };
 
+  // Generate AI commit message when dialog opens
+  useEffect(() => {
+    if (open && worktree) {
+      // Reset state
+      setMessage('');
+      setError(null);
+      setIsGenerating(true);
+
+      const generateMessage = async () => {
+        try {
+          const api = getElectronAPI();
+          if (!api?.worktree?.generateCommitMessage) {
+            setError('AI commit message generation not available');
+            setIsGenerating(false);
+            return;
+          }
+
+          const result = await api.worktree.generateCommitMessage(worktree.path);
+
+          if (result.success && result.message) {
+            setMessage(result.message);
+          } else {
+            // Don't show error toast, just log it and leave message empty
+            console.warn('Failed to generate commit message:', result.error);
+            setMessage('');
+          }
+        } catch (err) {
+          // Don't show error toast for generation failures
+          console.warn('Error generating commit message:', err);
+          setMessage('');
+        } finally {
+          setIsGenerating(false);
+        }
+      };
+
+      generateMessage();
+    }
+  }, [open, worktree]);
+
   if (!worktree) return null;
 
   return (
@@ -106,10 +146,20 @@ export function CommitWorktreeDialog({
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="commit-message">Commit Message</Label>
+            <Label htmlFor="commit-message" className="flex items-center gap-2">
+              Commit Message
+              {isGenerating && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Sparkles className="w-3 h-3 animate-pulse" />
+                  Generating...
+                </span>
+              )}
+            </Label>
             <Textarea
               id="commit-message"
-              placeholder="Describe your changes..."
+              placeholder={
+                isGenerating ? 'Generating commit message...' : 'Describe your changes...'
+              }
               value={message}
               onChange={(e) => {
                 setMessage(e.target.value);
@@ -118,6 +168,7 @@ export function CommitWorktreeDialog({
               onKeyDown={handleKeyDown}
               className="min-h-[100px] font-mono text-sm"
               autoFocus
+              disabled={isGenerating}
             />
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
@@ -128,10 +179,14 @@ export function CommitWorktreeDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isLoading}>
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading || isGenerating}
+          >
             Cancel
           </Button>
-          <Button onClick={handleCommit} disabled={isLoading || !message.trim()}>
+          <Button onClick={handleCommit} disabled={isLoading || isGenerating || !message.trim()}>
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
