@@ -530,6 +530,8 @@ export interface AppState {
   defaultSkipTests: boolean; // Default value for skip tests when creating new features
   enableDependencyBlocking: boolean; // When true, show blocked badges and warnings for features with incomplete dependencies (default: true)
   skipVerificationInAutoMode: boolean; // When true, auto-mode grabs features even if dependencies are not verified (only checks they're not running)
+  planUseSelectedWorktreeBranch: boolean; // When true, Plan dialog creates features on the currently selected worktree branch
+  addFeatureUseSelectedWorktreeBranch: boolean; // When true, Add Feature dialog defaults to custom mode with selected worktree branch
 
   // Worktree Settings
   useWorktrees: boolean; // Whether to use git worktree isolation for features (default: true)
@@ -913,6 +915,8 @@ export interface AppActions {
   setDefaultSkipTests: (skip: boolean) => void;
   setEnableDependencyBlocking: (enabled: boolean) => void;
   setSkipVerificationInAutoMode: (enabled: boolean) => Promise<void>;
+  setPlanUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
+  setAddFeatureUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
 
   // Worktree Settings actions
   setUseWorktrees: (enabled: boolean) => void;
@@ -1191,6 +1195,8 @@ const initialState: AppState = {
   defaultSkipTests: true, // Default to manual verification (tests disabled)
   enableDependencyBlocking: true, // Default to enabled (show dependency blocking UI)
   skipVerificationInAutoMode: false, // Default to disabled (require dependencies to be verified)
+  planUseSelectedWorktreeBranch: true, // Default to enabled (Plan creates features on selected worktree branch)
+  addFeatureUseSelectedWorktreeBranch: false, // Default to disabled (Add Feature uses normal defaults)
   useWorktrees: true, // Default to enabled (git worktree isolation)
   currentWorktreeByProject: {},
   worktreesByProject: {},
@@ -1812,6 +1818,18 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   setEnableDependencyBlocking: (enabled) => set({ enableDependencyBlocking: enabled }),
   setSkipVerificationInAutoMode: async (enabled) => {
     set({ skipVerificationInAutoMode: enabled });
+    // Sync to server settings file
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    await syncSettingsToServer();
+  },
+  setPlanUseSelectedWorktreeBranch: async (enabled) => {
+    set({ planUseSelectedWorktreeBranch: enabled });
+    // Sync to server settings file
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    await syncSettingsToServer();
+  },
+  setAddFeatureUseSelectedWorktreeBranch: async (enabled) => {
+    set({ addFeatureUseSelectedWorktreeBranch: enabled });
     // Sync to server settings file
     const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
     await syncSettingsToServer();
