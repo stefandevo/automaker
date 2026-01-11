@@ -434,7 +434,7 @@ export class OpencodeProvider extends CliProvider {
       case 'step_finish': {
         const finishEvent = openCodeEvent as OpenCodeStepFinishEvent;
 
-        // Check if the step failed
+        // Check if the step failed - either by error property or reason='error'
         if (finishEvent.part?.error) {
           return {
             type: 'error',
@@ -443,11 +443,34 @@ export class OpencodeProvider extends CliProvider {
           };
         }
 
+        // Check if reason indicates error (even without explicit error text)
+        if (finishEvent.part?.reason === 'error') {
+          return {
+            type: 'error',
+            session_id: finishEvent.sessionID,
+            error: 'Step execution failed',
+          };
+        }
+
         // Successful completion (reason: 'stop' or 'end_turn')
         return {
           type: 'result',
           subtype: 'success',
           session_id: finishEvent.sessionID,
+          result: (finishEvent.part as OpenCodePart & { result?: string })?.result,
+        };
+      }
+
+      case 'tool_error': {
+        const toolErrorEvent = openCodeEvent as OpenCodeBaseEvent;
+
+        // Extract error message from part.error
+        const errorMessage = toolErrorEvent.part?.error || 'Tool execution failed';
+
+        return {
+          type: 'error',
+          session_id: toolErrorEvent.sessionID,
+          error: errorMessage,
         };
       }
 
