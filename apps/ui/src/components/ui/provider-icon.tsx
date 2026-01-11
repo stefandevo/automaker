@@ -442,6 +442,60 @@ function getUnderlyingModelIcon(model?: AgentModel | string): ProviderIconKey {
     return 'opencode';
   }
 
+  // Check for dynamic OpenCode provider models (provider/model format)
+  // e.g., zai-coding-plan/glm-4.5, github-copilot/gpt-4o, google/gemini-2.5-pro
+  if (modelStr.includes('/')) {
+    const modelName = modelStr.split('/')[1] || '';
+    // Check model name for known patterns
+    if (modelName.includes('glm')) {
+      return 'glm';
+    }
+    if (
+      modelName.includes('claude') ||
+      modelName.includes('sonnet') ||
+      modelName.includes('opus')
+    ) {
+      return 'anthropic';
+    }
+    if (modelName.includes('gpt') || modelName.includes('o1') || modelName.includes('o3')) {
+      return 'openai';
+    }
+    if (modelName.includes('gemini')) {
+      return 'gemini';
+    }
+    if (modelName.includes('grok')) {
+      return 'grok';
+    }
+    if (modelName.includes('deepseek')) {
+      return 'deepseek';
+    }
+    if (modelName.includes('llama')) {
+      return 'meta';
+    }
+    if (modelName.includes('qwen')) {
+      return 'qwen';
+    }
+    if (modelName.includes('mistral')) {
+      return 'mistral';
+    }
+    // Check provider name for hints
+    const providerName = modelStr.split('/')[0] || '';
+    if (providerName.includes('google')) {
+      return 'gemini';
+    }
+    if (providerName.includes('anthropic')) {
+      return 'anthropic';
+    }
+    if (providerName.includes('openai')) {
+      return 'openai';
+    }
+    if (providerName.includes('xai')) {
+      return 'grok';
+    }
+    // Default for unknown dynamic models
+    return 'opencode';
+  }
+
   // Check for Cursor-specific models with underlying providers
   if (modelStr.includes('sonnet') || modelStr.includes('opus') || modelStr.includes('claude')) {
     return 'anthropic';

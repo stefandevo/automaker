@@ -296,7 +296,7 @@ export function PhaseModelSelector({
   }, [availableCursorModels, enabledCursorModels]);
 
   // Combine static and dynamic OpenCode models
-  const allOpencodeModels: ModelOption[] = React.useMemo(() => {
+  const allOpencodeModels: ModelOption[] = useMemo(() => {
     // Start with static models
     const staticModels = [...OPENCODE_MODELS];
 
