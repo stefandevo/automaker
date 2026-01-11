@@ -157,12 +157,25 @@ export interface OpenCodeToolResultEvent extends OpenCodeBaseEvent {
 }
 
 /**
+ * Error details object in error events
+ */
+interface OpenCodeErrorDetails {
+  name?: string;
+  message?: string;
+  data?: {
+    message?: string;
+    statusCode?: number;
+    isRetryable?: boolean;
+  };
+}
+
+/**
  * Error event - An error occurred
  */
 export interface OpenCodeErrorEvent extends OpenCodeBaseEvent {
   type: 'error';
   part?: OpenCodePart & { error: string };
-  error?: string;
+  error?: string | OpenCodeErrorDetails;
 }
 
 /**
@@ -481,10 +494,27 @@ export class OpencodeProvider extends CliProvider {
       case 'error': {
         const errorEvent = openCodeEvent as OpenCodeErrorEvent;
 
+        // Extract error message from various formats
+        let errorMessage = 'Unknown error';
+        if (errorEvent.error) {
+          if (typeof errorEvent.error === 'string') {
+            errorMessage = errorEvent.error;
+          } else {
+            // Error is an object with name/data structure
+            errorMessage =
+              errorEvent.error.data?.message ||
+              errorEvent.error.message ||
+              errorEvent.error.name ||
+              'Unknown error';
+          }
+        } else if (errorEvent.part?.error) {
+          errorMessage = errorEvent.part.error;
+        }
+
         return {
           type: 'error',
           session_id: errorEvent.sessionID,
-          error: errorEvent.part?.error || errorEvent.error || 'Unknown error',
+          error: errorMessage,
         };
       }
 

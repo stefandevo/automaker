@@ -111,7 +111,11 @@ async function executeWithProvider(prompt: string, model: string): Promise<strin
     cwd: process.cwd(), // Enhancement doesn't need a specific working directory
     readOnly: true, // Prompt enhancement only generates text, doesn't write files
   })) {
-    if (msg.type === 'assistant' && msg.message?.content) {
+    if (msg.type === 'error') {
+      // Throw error with the message from the provider
+      const errorMessage = msg.error || 'Provider returned an error';
+      throw new Error(errorMessage);
+    } else if (msg.type === 'assistant' && msg.message?.content) {
       for (const block of msg.message.content) {
         if (block.type === 'text' && block.text) {
           responseText += block.text;
