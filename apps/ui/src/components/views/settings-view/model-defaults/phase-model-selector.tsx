@@ -29,6 +29,7 @@ import {
   THINKING_LEVEL_LABELS,
   REASONING_EFFORT_LEVELS,
   REASONING_EFFORT_LABELS,
+  type ModelOption,
 } from '@/components/views/board-view/shared/model-constants';
 import { Check, ChevronsUpDown, Star, ChevronRight } from 'lucide-react';
 import { AnthropicIcon, CursorIcon, OpenAIIcon, OpenCodeIcon } from '@/components/ui/provider-icon';
@@ -81,7 +82,8 @@ export function PhaseModelSelector({
   const expandedTriggerRef = React.useRef<HTMLDivElement>(null);
   const expandedClaudeTriggerRef = React.useRef<HTMLDivElement>(null);
   const expandedCodexTriggerRef = React.useRef<HTMLDivElement>(null);
-  const { enabledCursorModels, favoriteModels, toggleFavoriteModel } = useAppStore();
+  const { enabledCursorModels, favoriteModels, toggleFavoriteModel, dynamicOpencodeModels } =
+    useAppStore();
 
   // Extract model and thinking/reasoning levels from value
   const selectedModel = value.model;
@@ -201,12 +203,24 @@ export function PhaseModelSelector({
     const codexModel = CODEX_MODELS.find((m) => m.id === selectedModel);
     if (codexModel) return { ...codexModel, icon: OpenAIIcon };
 
-    // Check OpenCode models
+    // Check OpenCode models (static)
     const opencodeModel = OPENCODE_MODELS.find((m) => m.id === selectedModel);
     if (opencodeModel) return { ...opencodeModel, icon: OpenCodeIcon };
 
+    // Check dynamic OpenCode models
+    const dynamicModel = dynamicOpencodeModels.find((m) => m.id === selectedModel);
+    if (dynamicModel) {
+      return {
+        id: dynamicModel.id,
+        label: dynamicModel.name,
+        description: dynamicModel.description,
+        provider: 'opencode' as const,
+        icon: OpenCodeIcon,
+      };
+    }
+
     return null;
-  }, [selectedModel, selectedThinkingLevel, availableCursorModels]);
+  }, [selectedModel, selectedThinkingLevel, availableCursorModels, dynamicOpencodeModels]);
 
   // Compute grouped vs standalone Cursor models
   const { groupedModels, standaloneCursorModels } = React.useMemo(() => {
@@ -241,13 +255,34 @@ export function PhaseModelSelector({
     return { groupedModels: grouped, standaloneCursorModels: standalone };
   }, [availableCursorModels, enabledCursorModels]);
 
+  // Combine static and dynamic OpenCode models
+  const allOpencodeModels: ModelOption[] = React.useMemo(() => {
+    // Start with static models
+    const staticModels = [...OPENCODE_MODELS];
+
+    // Add dynamic models (convert ModelDefinition to ModelOption)
+    const dynamicModelOptions: ModelOption[] = dynamicOpencodeModels.map((model) => ({
+      id: model.id,
+      label: model.name,
+      description: model.description,
+      badge: model.tier === 'premium' ? 'Premium' : model.tier === 'basic' ? 'Free' : undefined,
+      provider: 'opencode' as const,
+    }));
+
+    // Merge, avoiding duplicates (dynamic takes precedence for same ID)
+    const staticIds = new Set(staticModels.map((m) => m.id));
+    const uniqueDynamic = dynamicModelOptions.filter((m) => !staticIds.has(m.id));
+
+    return [...staticModels, ...uniqueDynamic];
+  }, [dynamicOpencodeModels]);
+
   // Group models
   const { favorites, claude, cursor, codex, opencode } = React.useMemo(() => {
     const favs: typeof CLAUDE_MODELS = [];
     const cModels: typeof CLAUDE_MODELS = [];
     const curModels: typeof CURSOR_MODELS = [];
     const codModels: typeof CODEX_MODELS = [];
-    const ocModels: typeof OPENCODE_MODELS = [];
+    const ocModels: ModelOption[] = [];
 
     // Process Claude Models
     CLAUDE_MODELS.forEach((model) => {
@@ -276,8 +311,8 @@ export function PhaseModelSelector({
       }
     });
 
-    // Process OpenCode Models
-    OPENCODE_MODELS.forEach((model) => {
+    // Process OpenCode Models (including dynamic)
+    allOpencodeModels.forEach((model) => {
       if (favoriteModels.includes(model.id)) {
         favs.push(model);
       } else {
@@ -292,7 +327,7 @@ export function PhaseModelSelector({
       codex: codModels,
       opencode: ocModels,
     };
-  }, [favoriteModels, availableCursorModels]);
+  }, [favoriteModels, availableCursorModels, allOpencodeModels]);
 
   // Render Codex model item with secondary popover for reasoning effort (only for models that support it)
   const renderCodexModelItem = (model: (typeof CODEX_MODELS)[0]) => {

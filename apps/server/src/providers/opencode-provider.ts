@@ -3,7 +3,7 @@
  *
  * Extends CliProvider with OpenCode-specific configuration:
  * - Event normalization for OpenCode's stream-json format
- * - Model definitions for anthropic, openai, and google models
+ * - Dynamic model discovery via `opencode models` CLI command
  * - NPX-based Windows execution strategy
  * - Platform-specific npm global installation paths
  *
@@ -12,6 +12,7 @@
 
 import * as path from 'path';
 import * as os from 'os';
+import { execFileSync } from 'child_process';
 import { CliProvider, type CliSpawnConfig } from './cli-provider.js';
 import type {
   ProviderConfig,
@@ -23,6 +24,10 @@ import type {
 } from '@automaker/types';
 import { stripProviderPrefix } from '@automaker/types';
 import { type SubprocessOptions, getOpenCodeAuthIndicators } from '@automaker/platform';
+import { createLogger } from '@automaker/utils';
+
+// Create logger for OpenCode operations
+const opencodeLogger = createLogger('OpencodeProvider');
 
 // =============================================================================
 // OpenCode Auth Types
@@ -36,91 +41,127 @@ export interface OpenCodeAuthStatus {
 }
 
 // =============================================================================
+// OpenCode Dynamic Model Types
+// =============================================================================
+
+/**
+ * Model information from `opencode models` CLI output
+ */
+export interface OpenCodeModelInfo {
+  /** Full model ID (e.g., "copilot/claude-sonnet-4-5") */
+  id: string;
+  /** Provider name (e.g., "copilot", "anthropic", "openai") */
+  provider: string;
+  /** Model name without provider prefix */
+  name: string;
+  /** Display name for UI */
+  displayName?: string;
+}
+
+/**
+ * Provider information from `opencode auth list` CLI output
+ */
+export interface OpenCodeProviderInfo {
+  /** Provider ID (e.g., "copilot", "anthropic") */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** Whether the provider is authenticated */
+  authenticated: boolean;
+  /** Authentication method if authenticated */
+  authMethod?: 'oauth' | 'api_key';
+}
+
+/** Cache duration for dynamic model fetching (5 minutes) */
+const MODEL_CACHE_DURATION_MS = 5 * 60 * 1000;
+
+// =============================================================================
 // OpenCode Stream Event Types
 // =============================================================================
 
 /**
+ * Part object within OpenCode events
+ */
+interface OpenCodePart {
+  id?: string;
+  sessionID?: string;
+  messageID?: string;
+  type: string;
+  text?: string;
+  reason?: string;
+  error?: string;
+  name?: string;
+  args?: unknown;
+  call_id?: string;
+  output?: string;
+  tokens?: {
+    input?: number;
+    output?: number;
+    reasoning?: number;
+  };
+}
+
+/**
  * Base interface for all OpenCode stream events
+ * Format: {"type":"event_type","timestamp":...,"sessionID":"...","part":{...}}
  */
 interface OpenCodeBaseEvent {
-  /** Event type identifier */
+  /** Event type identifier (step_start, text, step_finish, tool_call, etc.) */
   type: string;
-  /** Optional session identifier */
-  session_id?: string;
+  /** Unix timestamp */
+  timestamp?: number;
+  /** Session identifier */
+  sessionID?: string;
+  /** Event details */
+  part?: OpenCodePart;
 }
 
 /**
- * Text delta event - Incremental text output from the model
+ * Text event - Text output from the model
  */
-export interface OpenCodeTextDeltaEvent extends OpenCodeBaseEvent {
-  type: 'text-delta';
-  /** The incremental text content */
-  text: string;
+export interface OpenCodeTextEvent extends OpenCodeBaseEvent {
+  type: 'text';
+  part: OpenCodePart & { type: 'text'; text: string };
 }
 
 /**
- * Text end event - Signals completion of text generation
+ * Step start event - Begins an agentic loop iteration
  */
-export interface OpenCodeTextEndEvent extends OpenCodeBaseEvent {
-  type: 'text-end';
+export interface OpenCodeStepStartEvent extends OpenCodeBaseEvent {
+  type: 'step_start';
+  part: OpenCodePart & { type: 'step-start' };
+}
+
+/**
+ * Step finish event - Completes an agentic loop iteration
+ */
+export interface OpenCodeStepFinishEvent extends OpenCodeBaseEvent {
+  type: 'step_finish';
+  part: OpenCodePart & { type: 'step-finish'; reason?: string };
 }
 
 /**
  * Tool call event - Request to execute a tool
  */
 export interface OpenCodeToolCallEvent extends OpenCodeBaseEvent {
-  type: 'tool-call';
-  /** Unique identifier for this tool call */
-  call_id?: string;
-  /** Tool name to invoke */
-  name: string;
-  /** Arguments to pass to the tool */
-  args: unknown;
+  type: 'tool_call';
+  part: OpenCodePart & { type: 'tool-call'; name: string; args?: unknown };
 }
 
 /**
  * Tool result event - Output from a tool execution
  */
 export interface OpenCodeToolResultEvent extends OpenCodeBaseEvent {
-  type: 'tool-result';
-  /** The tool call ID this result corresponds to */
-  call_id?: string;
-  /** Output from the tool execution */
-  output: string;
+  type: 'tool_result';
+  part: OpenCodePart & { type: 'tool-result'; output: string };
 }
 
 /**
- * Tool error event - Tool execution failed
+ * Error event - An error occurred
  */
-export interface OpenCodeToolErrorEvent extends OpenCodeBaseEvent {
-  type: 'tool-error';
-  /** The tool call ID that failed */
-  call_id?: string;
-  /** Error message describing the failure */
-  error: string;
-}
-
-/**
- * Start step event - Begins an agentic loop iteration
- */
-export interface OpenCodeStartStepEvent extends OpenCodeBaseEvent {
-  type: 'start-step';
-  /** Step number in the agentic loop */
-  step?: number;
-}
-
-/**
- * Finish step event - Completes an agentic loop iteration
- */
-export interface OpenCodeFinishStepEvent extends OpenCodeBaseEvent {
-  type: 'finish-step';
-  /** Step number that completed */
-  step?: number;
-  /** Whether the step completed successfully */
-  success?: boolean;
-  /** Optional result data */
-  result?: string;
-  /** Optional error if step failed */
+export interface OpenCodeErrorEvent extends OpenCodeBaseEvent {
+  type: 'error';
+  part?: OpenCodePart & { error: string };
   error?: string;
 }
 
@@ -128,13 +169,12 @@ export interface OpenCodeFinishStepEvent extends OpenCodeBaseEvent {
  * Union type of all OpenCode stream events
  */
 export type OpenCodeStreamEvent =
-  | OpenCodeTextDeltaEvent
-  | OpenCodeTextEndEvent
+  | OpenCodeTextEvent
+  | OpenCodeStepStartEvent
+  | OpenCodeStepFinishEvent
   | OpenCodeToolCallEvent
   | OpenCodeToolResultEvent
-  | OpenCodeToolErrorEvent
-  | OpenCodeStartStepEvent
-  | OpenCodeFinishStepEvent;
+  | OpenCodeErrorEvent;
 
 // =============================================================================
 // Tool Use ID Generation
@@ -167,8 +207,28 @@ export function resetToolUseIdCounter(): void {
  *
  * OpenCode is an npm-distributed CLI tool that provides access to
  * multiple AI model providers through a unified interface.
+ *
+ * Supports dynamic model discovery via `opencode models` CLI command,
+ * enabling access to 75+ providers including GitHub Copilot, Google,
+ * Anthropic, OpenAI, and more based on user authentication.
  */
 export class OpencodeProvider extends CliProvider {
+  // ==========================================================================
+  // Dynamic Model Cache
+  // ==========================================================================
+
+  /** Cached model definitions */
+  private cachedModels: ModelDefinition[] | null = null;
+
+  /** Timestamp when cache expires */
+  private modelsCacheExpiry: number = 0;
+
+  /** Cached authenticated providers */
+  private cachedProviders: OpenCodeProviderInfo[] | null = null;
+
+  /** Whether model refresh is in progress */
+  private isRefreshing: boolean = false;
+
   constructor(config: ProviderConfig = {}) {
     super(config);
   }
@@ -219,14 +279,12 @@ export class OpencodeProvider extends CliProvider {
    *
    * Arguments built:
    * - 'run' subcommand for executing queries
-   * - '--format', 'stream-json' for JSONL streaming output
-   * - '-q' / '--quiet' to suppress spinner and interactive elements
-   * - '-c', '<cwd>' for working directory
+   * - '--format', 'json' for JSONL streaming output
+   * - '-c', '<cwd>' for working directory (using opencode's -c flag)
    * - '--model', '<model>' for model selection (if specified)
-   * - '-' as final arg to read prompt from stdin
    *
-   * The prompt is NOT included in CLI args - it's passed via stdin to avoid
-   * shell escaping issues with special characters in content.
+   * The prompt is passed via stdin (piped) to avoid shell escaping issues.
+   * OpenCode CLI automatically reads from stdin when input is piped.
    *
    * @param options - Execution options containing model, cwd, etc.
    * @returns Array of CLI arguments for opencode run
@@ -234,16 +292,8 @@ export class OpencodeProvider extends CliProvider {
   buildCliArgs(options: ExecuteOptions): string[] {
     const args: string[] = ['run'];
 
-    // Add streaming JSON output format for JSONL parsing
-    args.push('--format', 'stream-json');
-
-    // Suppress spinner and interactive elements for non-TTY usage
-    args.push('-q');
-
-    // Set working directory
-    if (options.cwd) {
-      args.push('-c', options.cwd);
-    }
+    // Add JSON output format for JSONL parsing (not 'stream-json')
+    args.push('--format', 'json');
 
     // Handle model selection
     // Strip 'opencode-' prefix if present, OpenCode uses format like 'anthropic/claude-sonnet-4-5'
@@ -252,9 +302,8 @@ export class OpencodeProvider extends CliProvider {
       args.push('--model', model);
     }
 
-    // Use '-' to indicate reading prompt from stdin
-    // This avoids shell escaping issues with special characters
-    args.push('-');
+    // Note: OpenCode reads from stdin automatically when input is piped
+    // No '-' argument needed
 
     return args;
   }
@@ -314,14 +363,13 @@ export class OpencodeProvider extends CliProvider {
    * Normalize a raw CLI event to ProviderMessage format
    *
    * Maps OpenCode event types to the standard ProviderMessage structure:
-   * - text-delta -> type: 'assistant', content with type: 'text'
-   * - text-end -> null (informational, no message needed)
-   * - tool-call -> type: 'assistant', content with type: 'tool_use'
-   * - tool-result -> type: 'assistant', content with type: 'tool_result'
-   * - tool-error -> type: 'error'
-   * - start-step -> null (informational, no message needed)
-   * - finish-step with success -> type: 'result', subtype: 'success'
-   * - finish-step with error -> type: 'error'
+   * - text -> type: 'assistant', content with type: 'text'
+   * - step_start -> null (informational, no message needed)
+   * - step_finish with reason 'stop' -> type: 'result', subtype: 'success'
+   * - step_finish with error -> type: 'error'
+   * - tool_call -> type: 'assistant', content with type: 'tool_use'
+   * - tool_result -> type: 'assistant', content with type: 'tool_result'
+   * - error -> type: 'error'
    *
    * @param event - Raw event from OpenCode CLI JSONL output
    * @returns Normalized ProviderMessage or null to skip the event
@@ -334,24 +382,24 @@ export class OpencodeProvider extends CliProvider {
     const openCodeEvent = event as OpenCodeStreamEvent;
 
     switch (openCodeEvent.type) {
-      case 'text-delta': {
-        const textEvent = openCodeEvent as OpenCodeTextDeltaEvent;
+      case 'text': {
+        const textEvent = openCodeEvent as OpenCodeTextEvent;
 
-        // Skip empty text deltas
-        if (!textEvent.text) {
+        // Skip empty text
+        if (!textEvent.part?.text) {
           return null;
         }
 
         const content: ContentBlock[] = [
           {
             type: 'text',
-            text: textEvent.text,
+            text: textEvent.part.text,
           },
         ];
 
         return {
           type: 'assistant',
-          session_id: textEvent.session_id,
+          session_id: textEvent.sessionID,
           message: {
             role: 'assistant',
             content,
@@ -359,29 +407,49 @@ export class OpencodeProvider extends CliProvider {
         };
       }
 
-      case 'text-end': {
-        // Text end is informational - no message needed
+      case 'step_start': {
+        // Step start is informational - no message needed
         return null;
       }
 
-      case 'tool-call': {
+      case 'step_finish': {
+        const finishEvent = openCodeEvent as OpenCodeStepFinishEvent;
+
+        // Check if the step failed
+        if (finishEvent.part?.error) {
+          return {
+            type: 'error',
+            session_id: finishEvent.sessionID,
+            error: finishEvent.part.error,
+          };
+        }
+
+        // Successful completion (reason: 'stop' or 'end_turn')
+        return {
+          type: 'result',
+          subtype: 'success',
+          session_id: finishEvent.sessionID,
+        };
+      }
+
+      case 'tool_call': {
         const toolEvent = openCodeEvent as OpenCodeToolCallEvent;
 
         // Generate a tool use ID if not provided
-        const toolUseId = toolEvent.call_id || generateToolUseId();
+        const toolUseId = toolEvent.part?.call_id || generateToolUseId();
 
         const content: ContentBlock[] = [
           {
             type: 'tool_use',
-            name: toolEvent.name,
+            name: toolEvent.part?.name || 'unknown',
             tool_use_id: toolUseId,
-            input: toolEvent.args,
+            input: toolEvent.part?.args,
           },
         ];
 
         return {
           type: 'assistant',
-          session_id: toolEvent.session_id,
+          session_id: toolEvent.sessionID,
           message: {
             role: 'assistant',
             content,
@@ -389,20 +457,20 @@ export class OpencodeProvider extends CliProvider {
         };
       }
 
-      case 'tool-result': {
+      case 'tool_result': {
         const resultEvent = openCodeEvent as OpenCodeToolResultEvent;
 
         const content: ContentBlock[] = [
           {
             type: 'tool_result',
-            tool_use_id: resultEvent.call_id,
-            content: resultEvent.output,
+            tool_use_id: resultEvent.part?.call_id,
+            content: resultEvent.part?.output || '',
           },
         ];
 
         return {
           type: 'assistant',
-          session_id: resultEvent.session_id,
+          session_id: resultEvent.sessionID,
           message: {
             role: 'assistant',
             content,
@@ -410,39 +478,13 @@ export class OpencodeProvider extends CliProvider {
         };
       }
 
-      case 'tool-error': {
-        const errorEvent = openCodeEvent as OpenCodeToolErrorEvent;
+      case 'error': {
+        const errorEvent = openCodeEvent as OpenCodeErrorEvent;
 
         return {
           type: 'error',
-          session_id: errorEvent.session_id,
-          error: errorEvent.error || 'Tool execution failed',
-        };
-      }
-
-      case 'start-step': {
-        // Start step is informational - no message needed
-        return null;
-      }
-
-      case 'finish-step': {
-        const finishEvent = openCodeEvent as OpenCodeFinishStepEvent;
-
-        // Check if the step failed
-        if (finishEvent.success === false || finishEvent.error) {
-          return {
-            type: 'error',
-            session_id: finishEvent.session_id,
-            error: finishEvent.error || 'Step execution failed',
-          };
-        }
-
-        // Successful completion
-        return {
-          type: 'result',
-          subtype: 'success',
-          session_id: finishEvent.session_id,
-          result: finishEvent.result,
+          session_id: errorEvent.sessionID,
+          error: errorEvent.part?.error || errorEvent.error || 'Unknown error',
         };
       }
 
@@ -460,12 +502,34 @@ export class OpencodeProvider extends CliProvider {
   /**
    * Get available models for OpenCode
    *
-   * Returns model definitions for supported AI providers:
-   * - Anthropic Claude models (Sonnet, Opus, Haiku)
-   * - OpenAI GPT-4o
-   * - Google Gemini 2.5 Pro
+   * Returns cached models if available and not expired.
+   * Falls back to default models if cache is empty or CLI is unavailable.
+   *
+   * Use `refreshModels()` to force a fresh fetch from the CLI.
    */
   getAvailableModels(): ModelDefinition[] {
+    // Return cached models if available and not expired
+    if (this.cachedModels && Date.now() < this.modelsCacheExpiry) {
+      return this.cachedModels;
+    }
+
+    // Return cached models even if expired (better than nothing)
+    if (this.cachedModels) {
+      // Trigger background refresh
+      this.refreshModels().catch((err) => {
+        opencodeLogger.debug(`Background model refresh failed: ${err}`);
+      });
+      return this.cachedModels;
+    }
+
+    // Return default models while cache is empty
+    return this.getDefaultModels();
+  }
+
+  /**
+   * Get default hardcoded models (fallback when CLI is unavailable)
+   */
+  private getDefaultModels(): ModelDefinition[] {
     return [
       // OpenCode Free Tier Models
       {
@@ -575,6 +639,447 @@ export class OpencodeProvider extends CliProvider {
         tier: 'premium',
       },
     ];
+  }
+
+  // ==========================================================================
+  // Dynamic Model Discovery
+  // ==========================================================================
+
+  /**
+   * Refresh models from OpenCode CLI
+   *
+   * Fetches available models using `opencode models` command and updates cache.
+   * Returns the updated model definitions.
+   */
+  async refreshModels(): Promise<ModelDefinition[]> {
+    // Prevent concurrent refreshes
+    if (this.isRefreshing) {
+      opencodeLogger.debug('Model refresh already in progress, waiting...');
+      // Wait for existing refresh to complete
+      while (this.isRefreshing) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return this.cachedModels || this.getDefaultModels();
+    }
+
+    this.isRefreshing = true;
+    opencodeLogger.debug('Starting model refresh from OpenCode CLI');
+
+    try {
+      const models = await this.fetchModelsFromCli();
+
+      if (models.length > 0) {
+        this.cachedModels = models;
+        this.modelsCacheExpiry = Date.now() + MODEL_CACHE_DURATION_MS;
+        opencodeLogger.debug(`Cached ${models.length} models from OpenCode CLI`);
+      } else {
+        // Keep existing cache if fetch returned nothing
+        opencodeLogger.debug('No models returned from CLI, keeping existing cache');
+      }
+
+      return this.cachedModels || this.getDefaultModels();
+    } catch (error) {
+      opencodeLogger.debug(`Model refresh failed: ${error}`);
+      // Return existing cache or defaults on error
+      return this.cachedModels || this.getDefaultModels();
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
+  /**
+   * Fetch models from OpenCode CLI using `opencode models` command
+   *
+   * Uses execFileSync to avoid shell injection vulnerabilities.
+   */
+  private async fetchModelsFromCli(): Promise<ModelDefinition[]> {
+    this.ensureCliDetected();
+
+    if (!this.cliPath) {
+      opencodeLogger.debug('OpenCode CLI not available for model fetch');
+      return [];
+    }
+
+    try {
+      let output: string;
+
+      if (this.detectedStrategy === 'npx') {
+        // NPX strategy: execute npx with opencode-ai package
+        opencodeLogger.debug('Executing: npx opencode-ai@latest models');
+        output = execFileSync('npx', ['opencode-ai@latest', 'models'], {
+          encoding: 'utf-8',
+          timeout: 30000,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (this.useWsl && this.wslCliPath) {
+        // WSL strategy: execute via wsl.exe
+        const wslArgs = this.wslDistribution
+          ? ['-d', this.wslDistribution, this.wslCliPath, 'models']
+          : [this.wslCliPath, 'models'];
+        opencodeLogger.debug(`Executing: wsl.exe ${wslArgs.join(' ')}`);
+        output = execFileSync('wsl.exe', wslArgs, {
+          encoding: 'utf-8',
+          timeout: 30000,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        // Direct CLI execution
+        opencodeLogger.debug(`Executing: ${this.cliPath} models`);
+        output = execFileSync(this.cliPath, ['models'], {
+          encoding: 'utf-8',
+          timeout: 30000,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      opencodeLogger.debug(
+        `Models output (${output.length} chars): ${output.substring(0, 200)}...`
+      );
+      return this.parseModelsOutput(output);
+    } catch (error) {
+      opencodeLogger.error(`Failed to fetch models from CLI: ${error}`);
+      return [];
+    }
+  }
+
+  /**
+   * Parse the output of `opencode models` command
+   *
+   * OpenCode CLI output format (one model per line):
+   * opencode/big-pickle
+   * opencode/glm-4.7-free
+   * anthropic/claude-3-5-haiku-20241022
+   * github-copilot/claude-3.5-sonnet
+   * ...
+   */
+  private parseModelsOutput(output: string): ModelDefinition[] {
+    // Parse line-based format (one model ID per line)
+    const lines = output.split('\n');
+    const models: ModelDefinition[] = [];
+
+    for (const line of lines) {
+      // Remove ANSI escape codes if any
+      const cleanLine = line.replace(/\x1b\[[0-9;]*m/g, '').trim();
+
+      // Skip empty lines
+      if (!cleanLine) continue;
+
+      // Parse "provider/model-name" format
+      const slashIndex = cleanLine.indexOf('/');
+      if (slashIndex > 0) {
+        const provider = cleanLine.substring(0, slashIndex);
+        const name = cleanLine.substring(slashIndex + 1);
+
+        // Skip if it looks like a path or error message
+        if (provider.includes(':') || provider.includes('\\') || name.includes(' ')) {
+          continue;
+        }
+
+        models.push(
+          this.modelInfoToDefinition({
+            id: cleanLine,
+            provider,
+            name,
+          })
+        );
+      }
+    }
+
+    opencodeLogger.debug(`Parsed ${models.length} models from CLI output`);
+    return models;
+  }
+
+  /**
+   * Convert OpenCodeModelInfo to ModelDefinition
+   */
+  private modelInfoToDefinition(model: OpenCodeModelInfo): ModelDefinition {
+    const displayName = model.displayName || this.formatModelDisplayName(model);
+    const tier = this.inferModelTier(model.id);
+
+    return {
+      id: model.id,
+      name: displayName,
+      modelString: model.id,
+      provider: model.provider, // Use the actual provider (github-copilot, google, etc.)
+      description: `${model.name} via ${this.formatProviderName(model.provider)}`,
+      supportsTools: true,
+      supportsVision: this.modelSupportsVision(model.id),
+      tier,
+      // Mark Claude Sonnet as default if available
+      default: model.id.includes('claude-sonnet-4'),
+    };
+  }
+
+  /**
+   * Format provider name for display
+   */
+  private formatProviderName(provider: string): string {
+    const providerNames: Record<string, string> = {
+      'github-copilot': 'GitHub Copilot',
+      google: 'Google AI',
+      openai: 'OpenAI',
+      anthropic: 'Anthropic',
+      opencode: 'OpenCode',
+      ollama: 'Ollama',
+      lmstudio: 'LM Studio',
+      azure: 'Azure OpenAI',
+      xai: 'xAI',
+      deepseek: 'DeepSeek',
+    };
+    return (
+      providerNames[provider] ||
+      provider.charAt(0).toUpperCase() + provider.slice(1).replace(/-/g, ' ')
+    );
+  }
+
+  /**
+   * Format a display name for a model
+   */
+  private formatModelDisplayName(model: OpenCodeModelInfo): string {
+    // Capitalize and format the model name
+    const formattedName = model.name
+      .split('-')
+      .map((part) => {
+        // Handle version numbers like "4-5" -> "4.5"
+        if (/^\d+$/.test(part)) {
+          return part;
+        }
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join(' ')
+      .replace(/(\d)\s+(\d)/g, '$1.$2'); // "4 5" -> "4.5"
+
+    // Format provider name
+    const providerNames: Record<string, string> = {
+      copilot: 'GitHub Copilot',
+      anthropic: 'Anthropic',
+      openai: 'OpenAI',
+      google: 'Google',
+      'amazon-bedrock': 'AWS Bedrock',
+      bedrock: 'AWS Bedrock',
+      opencode: 'OpenCode',
+      azure: 'Azure',
+      ollama: 'Ollama',
+      lmstudio: 'LM Studio',
+    };
+
+    const providerDisplay = providerNames[model.provider] || model.provider;
+    return `${formattedName} (${providerDisplay})`;
+  }
+
+  /**
+   * Infer model tier based on model ID
+   */
+  private inferModelTier(modelId: string): 'basic' | 'standard' | 'premium' {
+    const lowerModelId = modelId.toLowerCase();
+
+    // Premium tier: flagship models
+    if (
+      lowerModelId.includes('opus') ||
+      lowerModelId.includes('gpt-5') ||
+      lowerModelId.includes('o3') ||
+      lowerModelId.includes('o4') ||
+      lowerModelId.includes('gemini-2') ||
+      lowerModelId.includes('deepseek-r1')
+    ) {
+      return 'premium';
+    }
+
+    // Basic tier: free or lightweight models
+    if (
+      lowerModelId.includes('free') ||
+      lowerModelId.includes('nano') ||
+      lowerModelId.includes('mini') ||
+      lowerModelId.includes('haiku') ||
+      lowerModelId.includes('flash')
+    ) {
+      return 'basic';
+    }
+
+    // Standard tier: everything else
+    return 'standard';
+  }
+
+  /**
+   * Check if a model supports vision based on model ID
+   */
+  private modelSupportsVision(modelId: string): boolean {
+    const lowerModelId = modelId.toLowerCase();
+
+    // Models known to support vision
+    const visionModels = ['claude', 'gpt-4', 'gpt-5', 'gemini', 'nova', 'llama-3', 'llama-4'];
+
+    return visionModels.some((vm) => lowerModelId.includes(vm));
+  }
+
+  /**
+   * Fetch authenticated providers from OpenCode CLI
+   *
+   * Runs `opencode auth list` to get the list of authenticated providers.
+   * Uses execFileSync to avoid shell injection vulnerabilities.
+   */
+  async fetchAuthenticatedProviders(): Promise<OpenCodeProviderInfo[]> {
+    this.ensureCliDetected();
+
+    if (!this.cliPath) {
+      opencodeLogger.debug('OpenCode CLI not available for provider fetch');
+      return [];
+    }
+
+    try {
+      let output: string;
+
+      if (this.detectedStrategy === 'npx') {
+        // NPX strategy
+        opencodeLogger.debug('Executing: npx opencode-ai@latest auth list');
+        output = execFileSync('npx', ['opencode-ai@latest', 'auth', 'list'], {
+          encoding: 'utf-8',
+          timeout: 15000,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else if (this.useWsl && this.wslCliPath) {
+        // WSL strategy
+        const wslArgs = this.wslDistribution
+          ? ['-d', this.wslDistribution, this.wslCliPath, 'auth', 'list']
+          : [this.wslCliPath, 'auth', 'list'];
+        opencodeLogger.debug(`Executing: wsl.exe ${wslArgs.join(' ')}`);
+        output = execFileSync('wsl.exe', wslArgs, {
+          encoding: 'utf-8',
+          timeout: 15000,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } else {
+        // Direct CLI execution
+        opencodeLogger.debug(`Executing: ${this.cliPath} auth list`);
+        output = execFileSync(this.cliPath, ['auth', 'list'], {
+          encoding: 'utf-8',
+          timeout: 15000,
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      }
+
+      opencodeLogger.debug(
+        `Auth list output (${output.length} chars): ${output.substring(0, 200)}...`
+      );
+      const providers = this.parseProvidersOutput(output);
+      this.cachedProviders = providers;
+      return providers;
+    } catch (error) {
+      opencodeLogger.error(`Failed to fetch providers from CLI: ${error}`);
+      return this.cachedProviders || [];
+    }
+  }
+
+  /**
+   * Parse the output of `opencode auth list` command
+   *
+   * OpenCode CLI output format:
+   * ┌  Credentials ~/.local/share/opencode/auth.json
+   * │
+   * ●  Anthropic oauth
+   * │
+   * ●  GitHub Copilot oauth
+   * │
+   * └  4 credentials
+   *
+   * Each line with ● contains: provider name and auth method (oauth/api)
+   */
+  private parseProvidersOutput(output: string): OpenCodeProviderInfo[] {
+    const lines = output.split('\n');
+    const providers: OpenCodeProviderInfo[] = [];
+
+    // Provider name to ID mapping
+    const providerIdMap: Record<string, string> = {
+      anthropic: 'anthropic',
+      'github copilot': 'github-copilot',
+      copilot: 'github-copilot',
+      google: 'google',
+      openai: 'openai',
+      azure: 'azure',
+      bedrock: 'amazon-bedrock',
+      'amazon bedrock': 'amazon-bedrock',
+      ollama: 'ollama',
+      'lm studio': 'lmstudio',
+      lmstudio: 'lmstudio',
+      opencode: 'opencode',
+      'z.ai coding plan': 'z-ai',
+      'z.ai': 'z-ai',
+    };
+
+    for (const line of lines) {
+      // Look for lines with ● which indicate authenticated providers
+      // Format: "●  Provider Name auth_method"
+      if (line.includes('●')) {
+        // Remove ANSI escape codes and the ● symbol
+        const cleanLine = line
+          .replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI codes
+          .replace(/●/g, '') // Remove ● symbol
+          .trim();
+
+        if (!cleanLine) continue;
+
+        // Parse "Provider Name auth_method" format
+        // Auth method is the last word (oauth, api, etc.)
+        const parts = cleanLine.split(/\s+/);
+        if (parts.length >= 2) {
+          const authMethod = parts[parts.length - 1].toLowerCase();
+          const providerName = parts.slice(0, -1).join(' ');
+
+          // Determine auth method type
+          let authMethodType: 'oauth' | 'api_key' | undefined;
+          if (authMethod === 'oauth') {
+            authMethodType = 'oauth';
+          } else if (authMethod === 'api' || authMethod === 'api_key') {
+            authMethodType = 'api_key';
+          }
+
+          // Get provider ID from name
+          const providerNameLower = providerName.toLowerCase();
+          const providerId =
+            providerIdMap[providerNameLower] || providerNameLower.replace(/\s+/g, '-');
+
+          providers.push({
+            id: providerId,
+            name: providerName,
+            authenticated: true, // If it's listed with ●, it's authenticated
+            authMethod: authMethodType,
+          });
+        }
+      }
+    }
+
+    opencodeLogger.debug(`Parsed ${providers.length} providers from auth list`);
+    return providers;
+  }
+
+  /**
+   * Get cached authenticated providers
+   */
+  getCachedProviders(): OpenCodeProviderInfo[] | null {
+    return this.cachedProviders;
+  }
+
+  /**
+   * Clear the model cache, forcing a refresh on next access
+   */
+  clearModelCache(): void {
+    this.cachedModels = null;
+    this.modelsCacheExpiry = 0;
+    this.cachedProviders = null;
+    opencodeLogger.debug('Model cache cleared');
+  }
+
+  /**
+   * Check if we have cached models (not just defaults)
+   */
+  hasCachedModels(): boolean {
+    return this.cachedModels !== null && this.cachedModels.length > 0;
   }
 
   // ==========================================================================
