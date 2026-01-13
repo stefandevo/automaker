@@ -375,6 +375,8 @@ export interface GlobalSettings {
   defaultPlanningMode: PlanningMode;
   /** Default: require manual approval before generating */
   defaultRequirePlanApproval: boolean;
+  /** Default model and thinking level for new feature cards */
+  defaultFeatureModel: PhaseModelEntry;
 
   // Audio Preferences
   /** Mute completion notification sound */
@@ -698,6 +700,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   useWorktrees: true,
   defaultPlanningMode: 'skip',
   defaultRequirePlanApproval: false,
+  defaultFeatureModel: { model: 'opus' },
   muteDoneSound: false,
   phaseModels: DEFAULT_PHASE_MODELS,
   enhancementModel: 'sonnet',

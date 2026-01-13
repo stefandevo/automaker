@@ -657,6 +657,7 @@ export interface AppState {
 
   defaultPlanningMode: PlanningMode;
   defaultRequirePlanApproval: boolean;
+  defaultFeatureModel: PhaseModelEntry;
 
   // Plan Approval State
   // When a plan requires user approval, this holds the pending approval details
@@ -1104,6 +1105,7 @@ export interface AppActions {
 
   setDefaultPlanningMode: (mode: PlanningMode) => void;
   setDefaultRequirePlanApproval: (require: boolean) => void;
+  setDefaultFeatureModel: (entry: PhaseModelEntry) => void;
 
   // Plan Approval actions
   setPendingPlanApproval: (
@@ -1277,6 +1279,7 @@ const initialState: AppState = {
   specCreatingForProject: null,
   defaultPlanningMode: 'skip' as PlanningMode,
   defaultRequirePlanApproval: false,
+  defaultFeatureModel: { model: 'opus' } as PhaseModelEntry,
   pendingPlanApproval: null,
   claudeRefreshInterval: 60,
   claudeUsage: null,
@@ -3093,6 +3096,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   setDefaultPlanningMode: (mode) => set({ defaultPlanningMode: mode }),
   setDefaultRequirePlanApproval: (require) => set({ defaultRequirePlanApproval: require }),
+  setDefaultFeatureModel: (entry) => set({ defaultFeatureModel: entry }),
 
   // Plan Approval actions
   setPendingPlanApproval: (approval) => set({ pendingPlanApproval: approval }),
