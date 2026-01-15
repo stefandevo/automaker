@@ -1,95 +1,47 @@
-import { useState, useEffect, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+/**
+ * Running Agents View
+ *
+ * Displays all currently running agents across all projects.
+ * Uses React Query for data fetching with automatic polling.
+ */
+
+import { useState, useCallback } from 'react';
 import { Bot, Folder, Loader2, RefreshCw, Square, Activity, FileText } from 'lucide-react';
-import { getElectronAPI, RunningAgent } from '@/lib/electron';
+import type { RunningAgent } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useNavigate } from '@tanstack/react-router';
 import { AgentOutputModal } from './board-view/dialogs/agent-output-modal';
-
-const logger = createLogger('RunningAgentsView');
+import { useRunningAgents } from '@/hooks/queries';
+import { useStopFeature } from '@/hooks/mutations';
 
 export function RunningAgentsView() {
-  const [runningAgents, setRunningAgents] = useState<RunningAgent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<RunningAgent | null>(null);
   const { setCurrentProject, projects } = useAppStore();
   const navigate = useNavigate();
 
-  const fetchRunningAgents = useCallback(async () => {
-    try {
-      const api = getElectronAPI();
-      if (api.runningAgents) {
-        const result = await api.runningAgents.getAll();
-        if (result.success && result.runningAgents) {
-          setRunningAgents(result.runningAgents);
-        }
-      }
-    } catch (error) {
-      logger.error('Error fetching running agents:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  // Use React Query for running agents with auto-refresh
+  const { data, isLoading, isFetching, refetch } = useRunningAgents();
 
-  // Initial fetch
-  useEffect(() => {
-    fetchRunningAgents();
-  }, [fetchRunningAgents]);
+  const runningAgents = data?.agents ?? [];
 
-  // Auto-refresh every 2 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchRunningAgents();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [fetchRunningAgents]);
-
-  // Subscribe to auto-mode events to update in real-time
-  useEffect(() => {
-    const api = getElectronAPI();
-    if (!api.autoMode) return;
-
-    const unsubscribe = api.autoMode.onEvent((event) => {
-      // When a feature completes or errors, refresh the list
-      if (event.type === 'auto_mode_feature_complete' || event.type === 'auto_mode_error') {
-        fetchRunningAgents();
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchRunningAgents]);
+  // Use mutation for stopping features
+  const stopFeature = useStopFeature();
 
   const handleRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchRunningAgents();
-  }, [fetchRunningAgents]);
+    refetch();
+  }, [refetch]);
 
   const handleStopAgent = useCallback(
-    async (featureId: string) => {
-      try {
-        const api = getElectronAPI();
-        if (api.autoMode) {
-          await api.autoMode.stopFeature(featureId);
-          // Refresh list after stopping
-          fetchRunningAgents();
-        }
-      } catch (error) {
-        logger.error('Error stopping agent:', error);
-      }
+    (featureId: string) => {
+      stopFeature.mutate(featureId);
     },
-    [fetchRunningAgents]
+    [stopFeature]
   );
 
   const handleNavigateToProject = useCallback(
     (agent: RunningAgent) => {
-      // Find the project by path
       const project = projects.find((p) => p.path === agent.projectPath);
       if (project) {
         setCurrentProject(project);
@@ -103,7 +55,7 @@ export function RunningAgentsView() {
     setSelectedAgent(agent);
   }, []);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -128,8 +80,8 @@ export function RunningAgentsView() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-          <RefreshCw className={cn('h-4 w-4 mr-2', refreshing && 'animate-spin')} />
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isFetching}>
+          <RefreshCw className={cn('h-4 w-4 mr-2', isFetching && 'animate-spin')} />
           Refresh
         </Button>
       </div>
@@ -217,6 +169,7 @@ export function RunningAgentsView() {
                     variant="destructive"
                     size="sm"
                     onClick={() => handleStopAgent(agent.featureId)}
+                    disabled={stopFeature.isPending}
                   >
                     <Square className="h-3.5 w-3.5 mr-1.5" />
                     Stop
