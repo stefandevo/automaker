@@ -101,11 +101,9 @@ In the Discord, you can:
 
 ### Prerequisites
 
-- **Node.js 18+** (tested with Node.js 22)
+- **Node.js 22+** (required: >=22.0.0 <23.0.0)
 - **npm** (comes with Node.js)
-- **Authentication** (choose one):
-  - **[Claude Code CLI](https://code.claude.com/docs/en/overview)** (recommended) - Install and authenticate, credentials used automatically
-  - **Anthropic API Key** - Direct API key for Claude Agent SDK ([get one here](https://console.anthropic.com/))
+- **[Claude Code CLI](https://code.claude.com/docs/en/overview)** - Install and authenticate with your Anthropic subscription. Automaker integrates with your authenticated Claude Code CLI to access Claude models.
 
 ### Quick Start
 
@@ -117,30 +115,14 @@ cd automaker
 # 2. Install dependencies
 npm install
 
-# 3. Build shared packages (can be skipped - npm run dev does it automatically)
-npm run build:packages
-
-# 4. Start Automaker
+# 3. Start Automaker
 npm run dev
 # Choose between:
 #   1. Web Application (browser at localhost:3007)
 #   2. Desktop Application (Electron - recommended)
 ```
 
-**Authentication Setup:** On first run, Automaker will automatically show a setup wizard where you can configure authentication. You can choose to:
-
-- Use **Claude Code CLI** (recommended) - Automaker will detect your CLI credentials automatically
-- Enter an **API key** directly in the wizard
-
-If you prefer to set up authentication before running (e.g., for headless deployments or CI/CD), you can set it manually:
-
-```bash
-# Option A: Environment variable
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Option B: Create .env file in project root
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-```
+**Authentication:** Automaker integrates with your authenticated Claude Code CLI. Make sure you have [installed and authenticated](https://code.claude.com/docs/en/quickstart) the Claude Code CLI before running Automaker. Your CLI credentials will be detected automatically.
 
 **For Development:** `npm run dev` starts the development server with Vite live reload and hot module replacement for fast refresh and instant updates as you make changes.
 
@@ -220,16 +202,9 @@ docker-compose logs -f
 docker-compose down
 ```
 
-##### Configuration
+##### Authentication
 
-Create a `.env` file in the project root if using API key authentication:
-
-```bash
-# Optional: Anthropic API key (not needed if using Claude CLI authentication)
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-**Note:** Most users authenticate via Claude CLI instead of API keys. See [Claude CLI Authentication](#claude-cli-authentication-optional) below.
+Automaker integrates with your authenticated Claude Code CLI. To use CLI authentication in Docker, mount your Claude CLI config directory (see [Claude CLI Authentication](#claude-cli-authentication) below).
 
 ##### Working with Projects (Host Directory Access)
 
@@ -243,9 +218,9 @@ services:
       - /path/to/your/project:/projects/your-project
 ```
 
-##### Claude CLI Authentication (Optional)
+##### Claude CLI Authentication
 
-To use Claude Code CLI authentication instead of an API key, mount your Claude CLI config directory:
+Mount your Claude CLI config directory to use your authenticated CLI credentials:
 
 ```yaml
 services:
@@ -343,10 +318,6 @@ npm run lint
 
 ### Environment Configuration
 
-#### Authentication (if not using Claude Code CLI)
-
-- `ANTHROPIC_API_KEY` - Your Anthropic API key for Claude Agent SDK (not needed if using Claude Code CLI)
-
 #### Optional - Server
 
 - `PORT` - Server port (default: 3008)
@@ -357,7 +328,7 @@ npm run lint
 
 - `AUTOMAKER_API_KEY` - Optional API authentication for the server
 - `ALLOWED_ROOT_DIRECTORY` - Restrict file operations to specific directory
-- `CORS_ORIGIN` - CORS policy (default: \*)
+- `CORS_ORIGIN` - CORS allowed origins (comma-separated list; defaults to localhost only)
 
 #### Optional - Development
 
@@ -366,39 +337,11 @@ npm run lint
 
 ### Authentication Setup
 
-#### Option 1: Claude Code CLI (Recommended)
+Automaker integrates with your authenticated Claude Code CLI and uses your Anthropic subscription.
 
 Install and authenticate the Claude Code CLI following the [official quickstart guide](https://code.claude.com/docs/en/quickstart).
 
 Once authenticated, Automaker will automatically detect and use your CLI credentials. No additional configuration needed!
-
-#### Option 2: Direct API Key
-
-If you prefer not to use the CLI, you can provide an Anthropic API key directly using one of these methods:
-
-##### 2a. Shell Configuration
-
-Add to your `~/.bashrc` or `~/.zshrc`:
-
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-Then restart your terminal or run `source ~/.bashrc` (or `source ~/.zshrc`).
-
-##### 2b. .env File
-
-Create a `.env` file in the project root (gitignored):
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-PORT=3008
-DATA_DIR=./data
-```
-
-##### 2c. In-App Storage
-
-The application can store your API key securely in the settings UI. The key is persisted in the `DATA_DIR` directory.
 
 ## Features
 
@@ -508,20 +451,24 @@ Automaker provides several specialized views accessible via the sidebar or keybo
 | **Agent**          | `A`      | Interactive chat sessions with AI agents for exploratory work and questions                      |
 | **Spec**           | `D`      | Project specification editor with AI-powered generation and feature suggestions                  |
 | **Context**        | `C`      | Manage context files (markdown, images) that AI agents automatically reference                   |
-| **Profiles**       | `M`      | Create and manage AI agent profiles with custom prompts and configurations                       |
 | **Settings**       | `S`      | Configure themes, shortcuts, defaults, authentication, and more                                  |
 | **Terminal**       | `T`      | Integrated terminal with tabs, splits, and persistent sessions                                   |
-| **GitHub Issues**  | -        | Import and validate GitHub issues, convert to tasks                                              |
+| **Graph**          | `H`      | Visualize feature dependencies with interactive graph visualization                              |
+| **Ideation**       | `I`      | Brainstorm and generate ideas with AI assistance                                                 |
+| **Memory**         | `Y`      | View and manage agent memory and conversation history                                            |
+| **GitHub Issues**  | `G`      | Import and validate GitHub issues, convert to tasks                                              |
+| **GitHub PRs**     | `R`      | View and manage GitHub pull requests                                                             |
 | **Running Agents** | -        | View all active agents across projects with status and progress                                  |
 
 ### Keyboard Navigation
 
 All shortcuts are customizable in Settings. Default shortcuts:
 
-- **Navigation:** `K` (Board), `A` (Agent), `D` (Spec), `C` (Context), `S` (Settings), `M` (Profiles), `T` (Terminal)
+- **Navigation:** `K` (Board), `A` (Agent), `D` (Spec), `C` (Context), `S` (Settings), `T` (Terminal), `H` (Graph), `I` (Ideation), `Y` (Memory), `G` (GitHub Issues), `R` (GitHub PRs)
 - **UI:** `` ` `` (Toggle sidebar)
-- **Actions:** `N` (New item in current view), `G` (Start next features), `O` (Open project), `P` (Project picker)
+- **Actions:** `N` (New item in current view), `O` (Open project), `P` (Project picker)
 - **Projects:** `Q`/`E` (Cycle previous/next project)
+- **Terminal:** `Alt+D` (Split right), `Alt+S` (Split down), `Alt+W` (Close), `Alt+T` (New tab)
 
 ## Architecture
 
@@ -586,10 +533,16 @@ Stored in `{projectPath}/.automaker/`:
 │       ├── agent-output.md # AI agent output log
 │       └── images/        # Attached images
 ├── context/               # Context files for AI agents
+├── worktrees/             # Git worktree metadata
+├── validations/           # GitHub issue validation results
+├── ideation/              # Brainstorming and analysis data
+│   └── analysis.json      # Project structure analysis
+├── board/                 # Board-related data
+├── images/                # Project-level images
 ├── settings.json          # Project-specific settings
-├── spec.md               # Project specification
-├── analysis.json         # Project structure analysis
-└── feature-suggestions.json # AI-generated suggestions
+├── app_spec.txt           # Project specification (XML format)
+├── active-branches.json   # Active git branches tracking
+└── execution-state.json   # Auto-mode execution state
 ```
 
 #### Global Data
@@ -627,7 +580,6 @@ data/
 
 - [Contributing Guide](./CONTRIBUTING.md) - How to contribute to Automaker
 - [Project Documentation](./docs/) - Architecture guides, patterns, and developer docs
-- [Docker Isolation Guide](./docs/docker-isolation.md) - Security-focused Docker deployment
 - [Shared Packages Guide](./docs/llm-shared-packages.md) - Using monorepo packages
 
 ### Community
