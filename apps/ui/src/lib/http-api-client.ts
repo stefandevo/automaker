@@ -1692,6 +1692,18 @@ export class HttpApiClient implements ElectronAPI {
         editedPlan,
         feedback,
       }),
+    submitClarificationResponse: (
+      projectPath: string,
+      featureId: string,
+      requestId: string,
+      answers: Record<string, string>
+    ) =>
+      this.post('/api/auto-mode/clarification-response', {
+        projectPath,
+        featureId,
+        requestId,
+        answers,
+      }),
     resumeInterrupted: (projectPath: string) =>
       this.post('/api/auto-mode/resume-interrupted', { projectPath }),
     onEvent: (callback: (event: AutoModeEvent) => void) => {
