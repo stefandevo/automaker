@@ -36,6 +36,7 @@ const SETTINGS_FIELDS_TO_SYNC = [
   'fontFamilySans',
   'fontFamilyMono',
   'terminalFontFamily', // Maps to terminalState.fontFamily
+  'openTerminalMode', // Maps to terminalState.openTerminalMode
   'sidebarOpen',
   'chatHistoryOpen',
   'maxConcurrency',
@@ -101,6 +102,9 @@ function getSettingsFieldValue(
   if (field === 'terminalFontFamily') {
     return appState.terminalState.fontFamily;
   }
+  if (field === 'openTerminalMode') {
+    return appState.terminalState.openTerminalMode;
+  }
   return appState[field as keyof typeof appState];
 }
 
@@ -127,6 +131,9 @@ function hasSettingsFieldChanged(
   }
   if (field === 'terminalFontFamily') {
     return newState.terminalState.fontFamily !== prevState.terminalState.fontFamily;
+  }
+  if (field === 'openTerminalMode') {
+    return newState.terminalState.openTerminalMode !== prevState.terminalState.openTerminalMode;
   }
   const key = field as keyof typeof newState;
   return newState[key] !== prevState[key];
@@ -571,11 +578,16 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
       worktreePanelCollapsed: serverSettings.worktreePanelCollapsed ?? false,
       lastProjectDir: serverSettings.lastProjectDir ?? '',
       recentFolders: serverSettings.recentFolders ?? [],
-      // Terminal font (nested in terminalState)
-      ...(serverSettings.terminalFontFamily && {
+      // Terminal settings (nested in terminalState)
+      ...((serverSettings.terminalFontFamily || serverSettings.openTerminalMode) && {
         terminalState: {
           ...currentAppState.terminalState,
-          fontFamily: serverSettings.terminalFontFamily,
+          ...(serverSettings.terminalFontFamily && {
+            fontFamily: serverSettings.terminalFontFamily,
+          }),
+          ...(serverSettings.openTerminalMode && {
+            openTerminalMode: serverSettings.openTerminalMode,
+          }),
         },
       }),
     });
