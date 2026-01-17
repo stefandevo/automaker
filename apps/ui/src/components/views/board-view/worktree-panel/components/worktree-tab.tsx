@@ -38,7 +38,8 @@ interface WorktreeTabProps {
   onPull: (worktree: WorktreeInfo) => void;
   onPush: (worktree: WorktreeInfo) => void;
   onOpenInEditor: (worktree: WorktreeInfo, editorCommand?: string) => void;
-  onOpenInTerminal: (worktree: WorktreeInfo) => void;
+  onOpenInIntegratedTerminal: (worktree: WorktreeInfo, mode?: 'tab' | 'split') => void;
+  onOpenInExternalTerminal: (worktree: WorktreeInfo, terminalId?: string) => void;
   onCommit: (worktree: WorktreeInfo) => void;
   onCreatePR: (worktree: WorktreeInfo) => void;
   onAddressPRComments: (worktree: WorktreeInfo, prInfo: PRInfo) => void;
@@ -83,7 +84,8 @@ export function WorktreeTab({
   onPull,
   onPush,
   onOpenInEditor,
-  onOpenInTerminal,
+  onOpenInIntegratedTerminal,
+  onOpenInExternalTerminal,
   onCommit,
   onCreatePR,
   onAddressPRComments,
@@ -345,7 +347,8 @@ export function WorktreeTab({
         onPull={onPull}
         onPush={onPush}
         onOpenInEditor={onOpenInEditor}
-        onOpenInTerminal={onOpenInTerminal}
+        onOpenInIntegratedTerminal={onOpenInIntegratedTerminal}
+        onOpenInExternalTerminal={onOpenInExternalTerminal}
         onCommit={onCommit}
         onCreatePR={onCreatePR}
         onAddressPRComments={onAddressPRComments}
