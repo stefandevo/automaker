@@ -23,6 +23,8 @@ interface SpecHeaderProps {
   onSaveClick: () => void;
   showActionsPanel: boolean;
   onToggleActionsPanel: () => void;
+  // Mode-related props for save button visibility
+  showSaveButton: boolean;
 }
 
 export function SpecHeader({
@@ -41,6 +43,7 @@ export function SpecHeader({
   onSaveClick,
   showActionsPanel,
   onToggleActionsPanel,
+  showSaveButton,
 }: SpecHeaderProps) {
   const isProcessing = isRegenerating || isCreating || isGeneratingFeatures || isSyncing;
   const phaseLabel = PHASE_LABELS[currentPhase] || currentPhase;
@@ -133,15 +136,17 @@ export function SpecHeader({
                 <ListPlus className="w-4 h-4 mr-2" />
                 Generate Features
               </Button>
-              <Button
-                size="sm"
-                onClick={onSaveClick}
-                disabled={!hasChanges || isSaving}
-                data-testid="save-spec"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
-              </Button>
+              {showSaveButton && (
+                <Button
+                  size="sm"
+                  onClick={onSaveClick}
+                  disabled={!hasChanges || isSaving}
+                  data-testid="save-spec"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
+                </Button>
+              )}
             </div>
           )}
           {/* Tablet/Mobile: show trigger for actions panel */}
@@ -212,15 +217,17 @@ export function SpecHeader({
               <ListPlus className="w-4 h-4 mr-2" />
               Generate Features
             </Button>
-            <Button
-              className="w-full justify-start"
-              onClick={onSaveClick}
-              disabled={!hasChanges || isSaving}
-              data-testid="save-spec-mobile"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
-            </Button>
+            {showSaveButton && (
+              <Button
+                className="w-full justify-start"
+                onClick={onSaveClick}
+                disabled={!hasChanges || isSaving}
+                data-testid="save-spec-mobile"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
+              </Button>
+            )}
           </>
         )}
       </HeaderActionsPanel>
