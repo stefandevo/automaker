@@ -29,8 +29,8 @@ import {
   createGetAvailableEditorsHandler,
   createRefreshEditorsHandler,
 } from './routes/open-in-editor.js';
-import { createOpenInTerminalHandler } from './routes/open-in-terminal.js';
 import {
+  createOpenInTerminalHandler,
   createGetAvailableTerminalsHandler,
   createGetDefaultTerminalHandler,
   createRefreshTerminalsHandler,

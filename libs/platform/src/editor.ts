@@ -374,8 +374,9 @@ export async function openInTerminal(targetPath: string): Promise<{ terminalName
     await execFileAsync('osascript', ['-e', script]);
     return { terminalName: 'Terminal' };
   } else if (isWindows) {
-    // Try Windows Terminal first
-    try {
+    // Try Windows Terminal first - check if it exists before trying to spawn
+    const hasWindowsTerminal = await commandExists('wt');
+    if (hasWindowsTerminal) {
       return await new Promise((resolve, reject) => {
         const child: ChildProcess = spawn('wt', ['-d', targetPath], {
           shell: true,
@@ -384,33 +385,32 @@ export async function openInTerminal(targetPath: string): Promise<{ terminalName
         });
         child.unref();
 
-        child.on('error', () => {
-          reject(new Error('Windows Terminal not available'));
-        });
-
-        setTimeout(() => resolve({ terminalName: 'Windows Terminal' }), 100);
-      });
-    } catch {
-      // Fall back to cmd
-      return await new Promise((resolve, reject) => {
-        const child: ChildProcess = spawn(
-          'cmd',
-          ['/c', 'start', 'cmd', '/k', `cd /d "${targetPath}"`],
-          {
-            shell: true,
-            stdio: 'ignore',
-            detached: true,
-          }
-        );
-        child.unref();
-
         child.on('error', (err) => {
           reject(err);
         });
 
-        setTimeout(() => resolve({ terminalName: 'Command Prompt' }), 100);
+        setTimeout(() => resolve({ terminalName: 'Windows Terminal' }), 100);
       });
     }
+    // Fall back to cmd
+    return await new Promise((resolve, reject) => {
+      const child: ChildProcess = spawn(
+        'cmd',
+        ['/c', 'start', 'cmd', '/k', `cd /d "${targetPath}"`],
+        {
+          shell: true,
+          stdio: 'ignore',
+          detached: true,
+        }
+      );
+      child.unref();
+
+      child.on('error', (err) => {
+        reject(err);
+      });
+
+      setTimeout(() => resolve({ terminalName: 'Command Prompt' }), 100);
+    });
   } else {
     // Linux: Try common terminal emulators in order
     const terminals = [
@@ -425,7 +425,11 @@ export async function openInTerminal(targetPath: string): Promise<{ terminalName
         command: 'xfce4-terminal',
         args: ['--working-directory', targetPath],
       },
-      { name: 'xterm', command: 'xterm', args: ['-e', `cd "${targetPath}" && $SHELL`] },
+      {
+        name: 'xterm',
+        command: 'xterm',
+        args: ['-e', 'sh', '-c', `cd ${escapeShellArg(targetPath)} && $SHELL`],
+      },
       {
         name: 'x-terminal-emulator',
         command: 'x-terminal-emulator',

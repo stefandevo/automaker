@@ -556,7 +556,12 @@ async function executeTerminalCommand(terminal: TerminalInfo, targetPath: string
 
     case 'xterm':
       // XTerm: uses -e to run a shell in the directory
-      await spawnDetached(command, ['-e', `cd "${targetPath}" && $SHELL`]);
+      await spawnDetached(command, [
+        '-e',
+        'sh',
+        '-c',
+        `cd ${escapeShellArg(targetPath)} && $SHELL`,
+      ]);
       break;
 
     default:

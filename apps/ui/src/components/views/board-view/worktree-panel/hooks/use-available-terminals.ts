@@ -82,8 +82,8 @@ export function useEffectiveDefaultTerminal(terminals: TerminalInfo[]): Terminal
   const defaultTerminalId = useAppStore((s) => s.defaultTerminalId);
 
   return useMemo(() => {
-    // If user hasn't set a preference (null), they prefer integrated terminal
-    if (defaultTerminalId === null) {
+    // If user hasn't set a preference (null/undefined), they prefer integrated terminal
+    if (defaultTerminalId == null) {
       return null;
     }
 

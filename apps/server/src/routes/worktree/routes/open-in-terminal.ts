@@ -32,10 +32,10 @@ export function createOpenInTerminalHandler() {
         worktreePath: string;
       };
 
-      if (!worktreePath) {
+      if (!worktreePath || typeof worktreePath !== 'string') {
         res.status(400).json({
           success: false,
-          error: 'worktreePath required',
+          error: 'worktreePath required and must be a string',
         });
         return;
       }
