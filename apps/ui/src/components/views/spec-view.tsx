@@ -200,12 +200,7 @@ export function SpecView() {
         {/* Mode tabs bar - inside the content area, centered */}
         {!isProcessing && (
           <div className="flex items-center justify-center px-4 py-2 border-b border-border bg-muted/30 relative">
-            <SpecModeTabs
-              mode={mode}
-              onModeChange={handleModeChange}
-              isParseValid={isParseValid}
-              disabled={isProcessing}
-            />
+            <SpecModeTabs mode={mode} onModeChange={handleModeChange} isParseValid={isParseValid} />
             {/* Show parse error indicator - positioned to the right */}
             {!isParseValid && parseErrors.length > 0 && (
               <span className="absolute right-4 text-xs text-destructive">

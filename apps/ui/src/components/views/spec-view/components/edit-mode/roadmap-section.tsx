@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Map as MapIcon } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Map as MapIcon } from 'lucide-react';
 import type { SpecOutput } from '@automaker/spec-parser';
 
 type RoadmapPhase = NonNullable<SpecOutput['implementation_roadmap']>[number];
@@ -90,7 +89,7 @@ function PhaseCard({ phase, onChange, onRemove }: PhaseCardProps) {
             <div>
               <Label className="sr-only">Description</Label>
               <Textarea
-                value={phase.description}
+                value={phase.description ?? ''}
                 onChange={(e) => handleDescriptionChange(e.target.value)}
                 placeholder="Describe what this phase involves..."
                 rows={2}
@@ -120,12 +119,24 @@ export function RoadmapSection({ phases, onChange }: RoadmapSectionProps) {
   const isInternalChange = useRef(false);
 
   // Sync external phases to internal items when phases change externally
+  // Preserve existing IDs where possible to avoid unnecessary remounts
   useEffect(() => {
     if (isInternalChange.current) {
       isInternalChange.current = false;
       return;
     }
-    setItems(phases.map(phaseToInternal));
+    setItems((currentItems) => {
+      return phases.map((phase, index) => {
+        // Try to find existing item by index (positional matching)
+        const existingItem = currentItems[index];
+        if (existingItem) {
+          // Reuse the existing ID, update the phase data
+          return { ...phase, _id: existingItem._id };
+        }
+        // New phase - generate new ID
+        return phaseToInternal(phase);
+      });
+    });
   }, [phases]);
 
   const handleAdd = () => {

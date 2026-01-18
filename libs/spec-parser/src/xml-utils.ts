@@ -41,6 +41,9 @@ function escapeRegExp(value: string): string {
 /**
  * Extract the content of a specific XML section.
  *
+ * Note: This function only matches bare tags without attributes.
+ * Tags with attributes (e.g., `<tag id="1">`) are not supported.
+ *
  * @param xmlContent - The full XML content
  * @param tagName - The tag name to extract (e.g., 'implemented_features')
  * @returns The content between the tags, or null if not found
@@ -54,6 +57,9 @@ export function extractXmlSection(xmlContent: string, tagName: string): string |
 
 /**
  * Extract all values from repeated XML elements.
+ *
+ * Note: This function only matches bare tags without attributes.
+ * Tags with attributes (e.g., `<tag id="1">`) are not supported.
  *
  * @param xmlContent - The XML content to search
  * @param tagName - The tag name to extract values from
