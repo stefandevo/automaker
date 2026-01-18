@@ -620,12 +620,16 @@ export function TerminalView({ initialCwd, initialBranch, initialMode, nonce }: 
           toast.error('Failed to create terminal', {
             description: data.error || 'Unknown error',
           });
+          // Reset the handled ref so the same cwd can be retried
+          initialCwdHandledRef.current = undefined;
         }
       } catch (err) {
         logger.error('Create terminal with cwd error:', err);
         toast.error('Failed to create terminal', {
           description: 'Could not connect to server',
         });
+        // Reset the handled ref so the same cwd can be retried
+        initialCwdHandledRef.current = undefined;
       }
     };
 

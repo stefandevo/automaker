@@ -144,11 +144,26 @@ export function createRefreshTerminalsHandler() {
 export function createOpenInExternalTerminalHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      // worktreePath is validated by validatePathParams middleware
       const { worktreePath, terminalId } = req.body as {
         worktreePath: string;
         terminalId?: string;
       };
+
+      if (!worktreePath || typeof worktreePath !== 'string') {
+        res.status(400).json({
+          success: false,
+          error: 'worktreePath required and must be a string',
+        });
+        return;
+      }
+
+      if (!isAbsolute(worktreePath)) {
+        res.status(400).json({
+          success: false,
+          error: 'worktreePath must be an absolute path',
+        });
+        return;
+      }
 
       const result = await openInExternalTerminal(worktreePath, terminalId);
       res.json({

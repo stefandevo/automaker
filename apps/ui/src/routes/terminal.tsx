@@ -6,7 +6,7 @@ const terminalSearchSchema = z.object({
   cwd: z.string().optional(),
   branch: z.string().optional(),
   mode: z.enum(['tab', 'split']).optional(),
-  nonce: z.number().optional(),
+  nonce: z.coerce.number().optional(),
 });
 
 export const Route = createFileRoute('/terminal')({

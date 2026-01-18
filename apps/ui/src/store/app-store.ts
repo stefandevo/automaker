@@ -2779,7 +2779,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     let newLayout: TerminalPanelContent;
     if (!activeTab.layout) {
-      newLayout = { type: 'terminal', sessionId, size: 100 };
+      newLayout = { type: 'terminal', sessionId, size: 100, branchName };
     } else if (targetSessionId) {
       newLayout = splitTargetTerminal(activeTab.layout, targetSessionId, direction);
     } else {

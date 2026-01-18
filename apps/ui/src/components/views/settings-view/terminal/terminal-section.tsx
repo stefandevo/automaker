@@ -85,6 +85,7 @@ export function TerminalSection() {
               onClick={refresh}
               disabled={isRefreshing}
               title="Refresh available terminals"
+              aria-label="Refresh available terminals"
             >
               <RefreshCw className={cn('w-3.5 h-3.5', isRefreshing && 'animate-spin')} />
             </Button>
@@ -126,7 +127,7 @@ export function TerminalSection() {
               })}
             </SelectContent>
           </Select>
-          {terminals.length === 0 && (
+          {terminals.length === 0 && !isRefreshing && (
             <p className="text-xs text-muted-foreground italic">
               No external terminals detected. Click refresh to re-scan.
             </p>

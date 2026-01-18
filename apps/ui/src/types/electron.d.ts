@@ -967,7 +967,7 @@ export interface WorktreeAPI {
       terminalId: string;
       terminalName: string;
       terminalCommand: string;
-    };
+    } | null;
     error?: string;
   }>;
 
