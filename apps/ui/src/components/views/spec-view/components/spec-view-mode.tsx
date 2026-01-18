@@ -17,7 +17,7 @@ import {
   FolderOpen,
   Lightbulb,
   ListChecks,
-  Map,
+  Map as MapIcon,
   ScrollText,
   Wrench,
 } from 'lucide-react';
@@ -193,7 +193,7 @@ export function SpecViewMode({ spec }: SpecViewModeProps) {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Map className="w-5 h-5 text-primary" />
+                <MapIcon className="w-5 h-5 text-primary" />
                 Implementation Roadmap
               </CardTitle>
             </CardHeader>

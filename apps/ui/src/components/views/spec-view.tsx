@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { RefreshCw } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -154,18 +153,17 @@ export function SpecView() {
 
   // Render content based on mode
   const renderContent = () => {
-    // If the XML is invalid, we can only show the source editor.
+    // If the XML is invalid or spec is not parsed, we can only show the source editor.
     // The tabs for other modes are disabled, but this is an extra safeguard.
-    if (!isParseValid) {
+    if (!isParseValid || !parsedSpec) {
       return <SpecEditor value={appSpec} onChange={handleChange} />;
     }
 
     switch (mode) {
       case 'view':
-        // When isParseValid is true, parsedSpec is guaranteed to be non-null.
-        return <SpecViewMode spec={parsedSpec!} />;
+        return <SpecViewMode spec={parsedSpec} />;
       case 'edit':
-        return <SpecEditMode spec={parsedSpec!} onChange={handleChange} />;
+        return <SpecEditMode spec={parsedSpec} onChange={handleChange} />;
       case 'source':
       default:
         return <SpecEditor value={appSpec} onChange={handleChange} />;
@@ -194,7 +192,7 @@ export function SpecView() {
         onSaveClick={saveSpec}
         showActionsPanel={showActionsPanel}
         onToggleActionsPanel={() => setShowActionsPanel(!showActionsPanel)}
-        showSaveButton={true}
+        showSaveButton={mode !== 'view'}
       />
 
       {/* Mode tabs and content container */}

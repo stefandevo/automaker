@@ -32,6 +32,13 @@ export function unescapeXml(str: string): string {
 }
 
 /**
+ * Escape special RegExp characters in a string.
+ */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Extract the content of a specific XML section.
  *
  * @param xmlContent - The full XML content
@@ -39,7 +46,8 @@ export function unescapeXml(str: string): string {
  * @returns The content between the tags, or null if not found
  */
 export function extractXmlSection(xmlContent: string, tagName: string): string | null {
-  const regex = new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+  const safeTag = escapeRegExp(tagName);
+  const regex = new RegExp(`<${safeTag}>([\\s\\S]*?)<\\/${safeTag}>`, 'i');
   const match = xmlContent.match(regex);
   return match ? match[1] : null;
 }
@@ -53,7 +61,8 @@ export function extractXmlSection(xmlContent: string, tagName: string): string |
  */
 export function extractXmlElements(xmlContent: string, tagName: string): string[] {
   const values: string[] = [];
-  const regex = new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, 'g');
+  const safeTag = escapeRegExp(tagName);
+  const regex = new RegExp(`<${safeTag}>([\\s\\S]*?)<\\/${safeTag}>`, 'g');
   const matches = xmlContent.matchAll(regex);
 
   for (const match of matches) {

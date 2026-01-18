@@ -1,4 +1,4 @@
-import { Plus, X, GripVertical } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Map } from 'lucide-react';
+import { Map as MapIcon } from 'lucide-react';
 import type { SpecOutput } from '@automaker/spec-parser';
 
 type RoadmapPhase = NonNullable<SpecOutput['implementation_roadmap']>[number];
@@ -63,7 +63,6 @@ function PhaseCard({ phase, onChange, onRemove }: PhaseCardProps) {
     <Card className="border-border">
       <div className="p-3 space-y-3">
         <div className="flex items-start gap-2">
-          <GripVertical className="w-4 h-4 text-muted-foreground shrink-0 mt-2 cursor-grab" />
           <div className="flex-1 space-y-3">
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="flex-1">
@@ -154,7 +153,7 @@ export function RoadmapSection({ phases, onChange }: RoadmapSectionProps) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Map className="w-5 h-5 text-primary" />
+          <MapIcon className="w-5 h-5 text-primary" />
           Implementation Roadmap
         </CardTitle>
       </CardHeader>

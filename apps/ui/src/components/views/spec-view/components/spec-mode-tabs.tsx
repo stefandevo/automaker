@@ -26,6 +26,7 @@ export function SpecModeTabs({
           value="view"
           disabled={disabled || !isParseValid}
           title={!isParseValid ? 'Fix XML errors to enable View mode' : 'View formatted spec'}
+          aria-label="View"
         >
           <Eye className="w-4 h-4" />
           <span className="hidden sm:inline">View</span>
@@ -34,11 +35,17 @@ export function SpecModeTabs({
           value="edit"
           disabled={disabled || !isParseValid}
           title={!isParseValid ? 'Fix XML errors to enable Edit mode' : 'Edit spec with form'}
+          aria-label="Edit"
         >
           <Edit3 className="w-4 h-4" />
           <span className="hidden sm:inline">Edit</span>
         </TabsTrigger>
-        <TabsTrigger value="source" disabled={disabled} title="Edit raw XML source">
+        <TabsTrigger
+          value="source"
+          disabled={disabled}
+          title="Edit raw XML source"
+          aria-label="Source"
+        >
           <Code className="w-4 h-4" />
           <span className="hidden sm:inline">Source</span>
         </TabsTrigger>

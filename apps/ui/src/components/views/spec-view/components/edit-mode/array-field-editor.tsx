@@ -1,4 +1,4 @@
-import { Plus, X, GripVertical } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -77,7 +77,6 @@ export function ArrayFieldEditor({
           {items.map((item) => (
             <Card key={item.id} className="p-2">
               <div className="flex items-center gap-2">
-                <GripVertical className="w-4 h-4 text-muted-foreground shrink-0 cursor-grab" />
                 <Input
                   value={item.value}
                   onChange={(e) => handleChange(item.id, e.target.value)}

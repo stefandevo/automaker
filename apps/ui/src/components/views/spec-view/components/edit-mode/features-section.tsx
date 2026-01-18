@@ -1,4 +1,4 @@
-import { Plus, X, GripVertical, ChevronDown, ChevronUp, FolderOpen } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronUp, FolderOpen } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,7 +95,6 @@ function FeatureCard({ feature, index, onChange, onRemove }: FeatureCardProps) {
     <Card className="border-border">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <div className="flex items-center gap-2 p-3">
-          <GripVertical className="w-4 h-4 text-muted-foreground shrink-0 cursor-grab" />
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="p-1 h-auto">
               {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
