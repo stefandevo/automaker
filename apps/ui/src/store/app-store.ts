@@ -1982,10 +1982,13 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     }
 
     // Persist to server
+    // Note: undefined means "use global" but JSON doesn't serialize undefined,
+    // so we use a special marker string "__USE_GLOBAL__" to signal deletion
     const httpClient = getHttpApiClient();
+    const serverValue = profileId === undefined ? '__USE_GLOBAL__' : profileId;
     httpClient.settings
       .updateProject(project.path, {
-        activeClaudeApiProfileId: profileId,
+        activeClaudeApiProfileId: serverValue,
       })
       .catch((error) => {
         console.error('Failed to persist activeClaudeApiProfileId:', error);

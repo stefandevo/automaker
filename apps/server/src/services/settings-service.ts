@@ -633,9 +633,14 @@ export class SettingsService {
       };
     }
 
-    // Handle explicit undefined for activeClaudeApiProfileId (means "use global")
-    // JavaScript spread ignores undefined values, so we need to explicitly delete
-    if ('activeClaudeApiProfileId' in updates && updates.activeClaudeApiProfileId === undefined) {
+    // Handle activeClaudeApiProfileId special cases:
+    // - "__USE_GLOBAL__" marker means delete the key (use global setting)
+    // - null means explicit "Direct Anthropic API"
+    // - string means specific profile ID
+    if (
+      'activeClaudeApiProfileId' in updates &&
+      updates.activeClaudeApiProfileId === '__USE_GLOBAL__'
+    ) {
       delete updated.activeClaudeApiProfileId;
     }
 
