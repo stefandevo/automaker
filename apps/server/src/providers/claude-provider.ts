@@ -123,17 +123,23 @@ function buildEnv(
       env['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'] = '1';
     }
   } else {
-    // Use direct Anthropic API - pass through environment variables if set
+    // Use direct Anthropic API - pass through credentials or environment variables
     // This supports:
-    // 1. API Key mode: ANTHROPIC_API_KEY from credentials/env
+    // 1. API Key mode: ANTHROPIC_API_KEY from credentials (UI settings) or env
     // 2. Claude Max plan: Uses CLI OAuth auth (SDK handles this automatically)
     // 3. Custom endpoints via ANTHROPIC_BASE_URL env var (backward compatibility)
     //
+    // Priority: credentials file (UI settings) -> environment variable
     // Note: Only auth and endpoint vars are passed. Model mappings and traffic
     // control are NOT passed (those require a profile for explicit configuration).
-    if (process.env.ANTHROPIC_API_KEY) {
+    if (credentials?.apiKeys?.anthropic) {
+      env['ANTHROPIC_API_KEY'] = credentials.apiKeys.anthropic;
+    } else if (process.env.ANTHROPIC_API_KEY) {
       env['ANTHROPIC_API_KEY'] = process.env.ANTHROPIC_API_KEY;
     }
+    // If using Claude Max plan via CLI auth, the SDK handles auth automatically
+    // when no API key is provided. We don't set ANTHROPIC_AUTH_TOKEN here
+    // unless it was explicitly set in process.env (rare edge case).
     if (process.env.ANTHROPIC_AUTH_TOKEN) {
       env['ANTHROPIC_AUTH_TOKEN'] = process.env.ANTHROPIC_AUTH_TOKEN;
     }

@@ -48,8 +48,8 @@ function generateProfileId(): string {
 }
 
 // Mask API key for display (show first 4 + last 4 chars)
-function maskApiKey(key: string): string {
-  if (key.length <= 8) return '••••••••';
+function maskApiKey(key?: string): string {
+  if (!key || key.length <= 8) return '••••••••';
   return `${key.substring(0, 4)}••••${key.substring(key.length - 4)}`;
 }
 
