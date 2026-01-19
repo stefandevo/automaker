@@ -237,6 +237,17 @@ interface AutoModeConfig {
 }
 
 /**
+ * Per-project autoloop state for multi-project support
+ */
+interface ProjectAutoLoopState {
+  abortController: AbortController;
+  config: AutoModeConfig;
+  isRunning: boolean;
+  consecutiveFailures: { timestamp: number; error: string }[];
+  pausedDueToFailures: boolean;
+}
+
+/**
  * Execution state for recovery after server restart
  * Tracks which features were running and auto-loop configuration
  */
@@ -268,12 +279,15 @@ export class AutoModeService {
   private runningFeatures = new Map<string, RunningFeature>();
   private autoLoop: AutoLoopState | null = null;
   private featureLoader = new FeatureLoader();
+  // Per-project autoloop state (supports multiple concurrent projects)
+  private autoLoopsByProject = new Map<string, ProjectAutoLoopState>();
+  // Legacy single-project properties (kept for backward compatibility during transition)
   private autoLoopRunning = false;
   private autoLoopAbortController: AbortController | null = null;
   private config: AutoModeConfig | null = null;
   private pendingApprovals = new Map<string, PendingApproval>();
   private settingsService: SettingsService | null = null;
-  // Track consecutive failures to detect quota/API issues
+  // Track consecutive failures to detect quota/API issues (legacy global, now per-project in autoLoopsByProject)
   private consecutiveFailures: { timestamp: number; error: string }[] = [];
   private pausedDueToFailures = false;
 
@@ -285,6 +299,44 @@ export class AutoModeService {
   /**
    * Track a failure and check if we should pause due to consecutive failures.
    * This handles cases where the SDK doesn't return useful error messages.
+   * @param projectPath - The project to track failure for
+   * @param errorInfo - Error information
+   */
+  private trackFailureAndCheckPauseForProject(
+    projectPath: string,
+    errorInfo: { type: string; message: string }
+  ): boolean {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    if (!projectState) {
+      // Fall back to legacy global tracking
+      return this.trackFailureAndCheckPause(errorInfo);
+    }
+
+    const now = Date.now();
+
+    // Add this failure
+    projectState.consecutiveFailures.push({ timestamp: now, error: errorInfo.message });
+
+    // Remove old failures outside the window
+    projectState.consecutiveFailures = projectState.consecutiveFailures.filter(
+      (f) => now - f.timestamp < FAILURE_WINDOW_MS
+    );
+
+    // Check if we've hit the threshold
+    if (projectState.consecutiveFailures.length >= CONSECUTIVE_FAILURE_THRESHOLD) {
+      return true; // Should pause
+    }
+
+    // Also immediately pause for known quota/rate limit errors
+    if (errorInfo.type === 'quota_exhausted' || errorInfo.type === 'rate_limit') {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Track a failure and check if we should pause due to consecutive failures (legacy global).
    */
   private trackFailureAndCheckPause(errorInfo: { type: string; message: string }): boolean {
     const now = Date.now();
@@ -312,7 +364,49 @@ export class AutoModeService {
 
   /**
    * Signal that we should pause due to repeated failures or quota exhaustion.
-   * This will pause the auto loop to prevent repeated failures.
+   * This will pause the auto loop for a specific project.
+   * @param projectPath - The project to pause
+   * @param errorInfo - Error information
+   */
+  private signalShouldPauseForProject(
+    projectPath: string,
+    errorInfo: { type: string; message: string }
+  ): void {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    if (!projectState) {
+      // Fall back to legacy global pause
+      this.signalShouldPause(errorInfo);
+      return;
+    }
+
+    if (projectState.pausedDueToFailures) {
+      return; // Already paused
+    }
+
+    projectState.pausedDueToFailures = true;
+    const failureCount = projectState.consecutiveFailures.length;
+    logger.info(
+      `Pausing auto loop for ${projectPath} after ${failureCount} consecutive failures. Last error: ${errorInfo.type}`
+    );
+
+    // Emit event to notify UI
+    this.emitAutoModeEvent('auto_mode_paused_failures', {
+      message:
+        failureCount >= CONSECUTIVE_FAILURE_THRESHOLD
+          ? `Auto Mode paused: ${failureCount} consecutive failures detected. This may indicate a quota limit or API issue. Please check your usage and try again.`
+          : 'Auto Mode paused: Usage limit or API error detected. Please wait for your quota to reset or check your API configuration.',
+      errorType: errorInfo.type,
+      originalError: errorInfo.message,
+      failureCount,
+      projectPath,
+    });
+
+    // Stop the auto loop for this project
+    this.stopAutoLoopForProject(projectPath);
+  }
+
+  /**
+   * Signal that we should pause due to repeated failures or quota exhaustion (legacy global).
    */
   private signalShouldPause(errorInfo: { type: string; message: string }): void {
     if (this.pausedDueToFailures) {
@@ -342,7 +436,19 @@ export class AutoModeService {
   }
 
   /**
-   * Reset failure tracking (called when user manually restarts auto mode)
+   * Reset failure tracking for a specific project
+   * @param projectPath - The project to reset failure tracking for
+   */
+  private resetFailureTrackingForProject(projectPath: string): void {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    if (projectState) {
+      projectState.consecutiveFailures = [];
+      projectState.pausedDueToFailures = false;
+    }
+  }
+
+  /**
+   * Reset failure tracking (called when user manually restarts auto mode) - legacy global
    */
   private resetFailureTracking(): void {
     this.consecutiveFailures = [];
@@ -350,16 +456,255 @@ export class AutoModeService {
   }
 
   /**
-   * Record a successful feature completion to reset consecutive failure count
+   * Record a successful feature completion to reset consecutive failure count for a project
+   * @param projectPath - The project to record success for
+   */
+  private recordSuccessForProject(projectPath: string): void {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    if (projectState) {
+      projectState.consecutiveFailures = [];
+    }
+  }
+
+  /**
+   * Record a successful feature completion to reset consecutive failure count - legacy global
    */
   private recordSuccess(): void {
     this.consecutiveFailures = [];
   }
 
   /**
+   * Start the auto mode loop for a specific project (supports multiple concurrent projects)
+   * @param projectPath - The project to start auto mode for
+   * @param maxConcurrency - Maximum concurrent features (default: 3)
+   */
+  async startAutoLoopForProject(projectPath: string, maxConcurrency = 3): Promise<void> {
+    // Check if this project already has an active autoloop
+    const existingState = this.autoLoopsByProject.get(projectPath);
+    if (existingState?.isRunning) {
+      throw new Error(`Auto mode is already running for project: ${projectPath}`);
+    }
+
+    // Create new project autoloop state
+    const abortController = new AbortController();
+    const config: AutoModeConfig = {
+      maxConcurrency,
+      useWorktrees: true,
+      projectPath,
+    };
+
+    const projectState: ProjectAutoLoopState = {
+      abortController,
+      config,
+      isRunning: true,
+      consecutiveFailures: [],
+      pausedDueToFailures: false,
+    };
+
+    this.autoLoopsByProject.set(projectPath, projectState);
+
+    logger.info(
+      `Starting auto loop for project: ${projectPath} with maxConcurrency: ${maxConcurrency}`
+    );
+
+    this.emitAutoModeEvent('auto_mode_started', {
+      message: `Auto mode started with max ${maxConcurrency} concurrent features`,
+      projectPath,
+    });
+
+    // Save execution state for recovery after restart
+    await this.saveExecutionStateForProject(projectPath, maxConcurrency);
+
+    // Run the loop in the background
+    this.runAutoLoopForProject(projectPath).catch((error) => {
+      logger.error(`Loop error for ${projectPath}:`, error);
+      const errorInfo = classifyError(error);
+      this.emitAutoModeEvent('auto_mode_error', {
+        error: errorInfo.message,
+        errorType: errorInfo.type,
+        projectPath,
+      });
+    });
+  }
+
+  /**
+   * Run the auto loop for a specific project
+   */
+  private async runAutoLoopForProject(projectPath: string): Promise<void> {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    if (!projectState) {
+      logger.warn(`No project state found for ${projectPath}, stopping loop`);
+      return;
+    }
+
+    logger.info(
+      `[AutoLoop] Starting loop for ${projectPath}, maxConcurrency: ${projectState.config.maxConcurrency}`
+    );
+    let iterationCount = 0;
+
+    while (projectState.isRunning && !projectState.abortController.signal.aborted) {
+      iterationCount++;
+      try {
+        // Count running features for THIS project only
+        const projectRunningCount = this.getRunningCountForProject(projectPath);
+
+        // Check if we have capacity for this project
+        if (projectRunningCount >= projectState.config.maxConcurrency) {
+          logger.debug(
+            `[AutoLoop] At capacity (${projectRunningCount}/${projectState.config.maxConcurrency}), waiting...`
+          );
+          await this.sleep(5000);
+          continue;
+        }
+
+        // Load pending features for this project
+        const pendingFeatures = await this.loadPendingFeatures(projectPath);
+
+        logger.debug(
+          `[AutoLoop] Iteration ${iterationCount}: Found ${pendingFeatures.length} pending features, ${projectRunningCount} running`
+        );
+
+        if (pendingFeatures.length === 0) {
+          this.emitAutoModeEvent('auto_mode_idle', {
+            message: 'No pending features - auto mode idle',
+            projectPath,
+          });
+          logger.info(`[AutoLoop] No pending features, sleeping for 10s...`);
+          await this.sleep(10000);
+          continue;
+        }
+
+        // Find a feature not currently running
+        const nextFeature = pendingFeatures.find((f) => !this.runningFeatures.has(f.id));
+
+        if (nextFeature) {
+          logger.info(`[AutoLoop] Starting feature ${nextFeature.id}: ${nextFeature.title}`);
+          // Start feature execution in background
+          this.executeFeature(
+            projectPath,
+            nextFeature.id,
+            projectState.config.useWorktrees,
+            true
+          ).catch((error) => {
+            logger.error(`Feature ${nextFeature.id} error:`, error);
+          });
+        } else {
+          logger.debug(`[AutoLoop] All pending features are already running`);
+        }
+
+        await this.sleep(2000);
+      } catch (error) {
+        logger.error(`[AutoLoop] Loop iteration error for ${projectPath}:`, error);
+        await this.sleep(5000);
+      }
+    }
+
+    // Mark as not running when loop exits
+    projectState.isRunning = false;
+    logger.info(
+      `[AutoLoop] Loop stopped for project: ${projectPath} after ${iterationCount} iterations`
+    );
+  }
+
+  /**
+   * Get count of running features for a specific project
+   */
+  private getRunningCountForProject(projectPath: string): number {
+    let count = 0;
+    for (const [, feature] of this.runningFeatures) {
+      if (feature.projectPath === projectPath) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Stop the auto mode loop for a specific project
+   * @param projectPath - The project to stop auto mode for
+   */
+  async stopAutoLoopForProject(projectPath: string): Promise<number> {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    if (!projectState) {
+      logger.warn(`No auto loop running for project: ${projectPath}`);
+      return 0;
+    }
+
+    const wasRunning = projectState.isRunning;
+    projectState.isRunning = false;
+    projectState.abortController.abort();
+
+    // Clear execution state when auto-loop is explicitly stopped
+    await this.clearExecutionState(projectPath);
+
+    // Emit stop event
+    if (wasRunning) {
+      this.emitAutoModeEvent('auto_mode_stopped', {
+        message: 'Auto mode stopped',
+        projectPath,
+      });
+    }
+
+    // Remove from map
+    this.autoLoopsByProject.delete(projectPath);
+
+    return this.getRunningCountForProject(projectPath);
+  }
+
+  /**
+   * Check if auto mode is running for a specific project
+   */
+  isAutoLoopRunningForProject(projectPath: string): boolean {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    return projectState?.isRunning ?? false;
+  }
+
+  /**
+   * Get auto loop config for a specific project
+   */
+  getAutoLoopConfigForProject(projectPath: string): AutoModeConfig | null {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    return projectState?.config ?? null;
+  }
+
+  /**
+   * Save execution state for a specific project
+   */
+  private async saveExecutionStateForProject(
+    projectPath: string,
+    maxConcurrency: number
+  ): Promise<void> {
+    try {
+      await ensureAutomakerDir(projectPath);
+      const statePath = getExecutionStatePath(projectPath);
+      const runningFeatureIds = Array.from(this.runningFeatures.entries())
+        .filter(([, f]) => f.projectPath === projectPath)
+        .map(([id]) => id);
+
+      const state: ExecutionState = {
+        version: 1,
+        autoLoopWasRunning: true,
+        maxConcurrency,
+        projectPath,
+        runningFeatureIds,
+        savedAt: new Date().toISOString(),
+      };
+      await secureFs.writeFile(statePath, JSON.stringify(state, null, 2), 'utf-8');
+      logger.info(
+        `Saved execution state for ${projectPath}: ${runningFeatureIds.length} running features`
+      );
+    } catch (error) {
+      logger.error(`Failed to save execution state for ${projectPath}:`, error);
+    }
+  }
+
+  /**
    * Start the auto mode loop - continuously picks and executes pending features
+   * @deprecated Use startAutoLoopForProject instead for multi-project support
    */
   async startAutoLoop(projectPath: string, maxConcurrency = 3): Promise<void> {
+    // For backward compatibility, delegate to the new per-project method
+    // But also maintain legacy state for existing code that might check it
     if (this.autoLoopRunning) {
       throw new Error('Auto mode is already running');
     }
@@ -397,6 +742,9 @@ export class AutoModeService {
     });
   }
 
+  /**
+   * @deprecated Use runAutoLoopForProject instead
+   */
   private async runAutoLoop(): Promise<void> {
     while (
       this.autoLoopRunning &&
@@ -449,6 +797,7 @@ export class AutoModeService {
 
   /**
    * Stop the auto mode loop
+   * @deprecated Use stopAutoLoopForProject instead for multi-project support
    */
   async stopAutoLoop(): Promise<number> {
     const wasRunning = this.autoLoopRunning;
@@ -1783,6 +2132,46 @@ Format your response as a structured markdown document.`;
   }
 
   /**
+   * Get status for a specific project
+   * @param projectPath - The project to get status for
+   */
+  getStatusForProject(projectPath: string): {
+    isAutoLoopRunning: boolean;
+    runningFeatures: string[];
+    runningCount: number;
+    maxConcurrency: number;
+  } {
+    const projectState = this.autoLoopsByProject.get(projectPath);
+    const runningFeatures: string[] = [];
+
+    for (const [featureId, feature] of this.runningFeatures) {
+      if (feature.projectPath === projectPath) {
+        runningFeatures.push(featureId);
+      }
+    }
+
+    return {
+      isAutoLoopRunning: projectState?.isRunning ?? false,
+      runningFeatures,
+      runningCount: runningFeatures.length,
+      maxConcurrency: projectState?.config.maxConcurrency ?? 3,
+    };
+  }
+
+  /**
+   * Get all projects that have auto mode running
+   */
+  getActiveAutoLoopProjects(): string[] {
+    const activeProjects: string[] = [];
+    for (const [projectPath, state] of this.autoLoopsByProject) {
+      if (state.isRunning) {
+        activeProjects.push(projectPath);
+      }
+    }
+    return activeProjects;
+  }
+
+  /**
    * Get detailed info about all running agents
    */
   async getRunningAgents(): Promise<
@@ -2259,6 +2648,10 @@ Format your response as a structured markdown document.`;
         }
       }
 
+      logger.debug(
+        `[loadPendingFeatures] Found ${allFeatures.length} total features, ${pendingFeatures.length} with backlog/pending/ready status`
+      );
+
       // Apply dependency-aware ordering
       const { orderedFeatures } = resolveDependencies(pendingFeatures);
 
@@ -2271,8 +2664,13 @@ Format your response as a structured markdown document.`;
         areDependenciesSatisfied(feature, allFeatures, { skipVerification })
       );
 
+      logger.debug(
+        `[loadPendingFeatures] After dependency filtering: ${readyFeatures.length} ready features (skipVerification=${skipVerification})`
+      );
+
       return readyFeatures;
-    } catch {
+    } catch (error) {
+      logger.error(`[loadPendingFeatures] Error loading features:`, error);
       return [];
     }
   }

@@ -279,8 +279,8 @@ export function PhaseModelSelector({
   }, [codexModels]);
 
   // Filter Cursor models to only show enabled ones
+  // With canonical IDs, both CURSOR_MODELS and enabledCursorModels use prefixed format
   const availableCursorModels = CURSOR_MODELS.filter((model) => {
-    // Compare model.id directly since both model.id and enabledCursorModels use full IDs with prefix
     return enabledCursorModels.includes(model.id as CursorModelId);
   });
 
@@ -300,6 +300,7 @@ export function PhaseModelSelector({
       };
     }
 
+    // With canonical IDs, direct comparison works
     const cursorModel = availableCursorModels.find((m) => m.id === selectedModel);
     if (cursorModel) return { ...cursorModel, icon: CursorIcon };
 
@@ -352,7 +353,7 @@ export function PhaseModelSelector({
     const seenGroups = new Set<string>();
 
     availableCursorModels.forEach((model) => {
-      const cursorId = stripProviderPrefix(model.id) as CursorModelId;
+      const cursorId = model.id as CursorModelId;
 
       // Check if this model is standalone
       if (STANDALONE_CURSOR_MODELS.includes(cursorId)) {
@@ -908,8 +909,8 @@ export function PhaseModelSelector({
 
   // Render Cursor model item (no thinking level needed)
   const renderCursorModelItem = (model: (typeof CURSOR_MODELS)[0]) => {
-    const modelValue = stripProviderPrefix(model.id);
-    const isSelected = selectedModel === modelValue;
+    // With canonical IDs, store the full prefixed ID
+    const isSelected = selectedModel === model.id;
     const isFavorite = favoriteModels.includes(model.id);
 
     return (
@@ -917,7 +918,7 @@ export function PhaseModelSelector({
         key={model.id}
         value={model.label}
         onSelect={() => {
-          onChange({ model: modelValue as CursorModelId });
+          onChange({ model: model.id as CursorModelId });
           setOpen(false);
         }}
         className="group flex items-center justify-between py-2"
@@ -1458,7 +1459,7 @@ export function PhaseModelSelector({
                   return favorites.map((model) => {
                     // Check if this favorite is part of a grouped model
                     if (model.provider === 'cursor') {
-                      const cursorId = stripProviderPrefix(model.id) as CursorModelId;
+                      const cursorId = model.id as CursorModelId;
                       const group = getModelGroup(cursorId);
                       if (group) {
                         // Skip if we already rendered this group

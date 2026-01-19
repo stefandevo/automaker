@@ -501,7 +501,7 @@ export interface ProjectAnalysis {
 
 // Terminal panel layout types (recursive for splits)
 export type TerminalPanelContent =
-  | { type: 'terminal'; sessionId: string; size?: number; fontSize?: number }
+  | { type: 'terminal'; sessionId: string; size?: number; fontSize?: number; branchName?: string }
   | {
       type: 'split';
       id: string; // Stable ID for React key stability
@@ -532,12 +532,13 @@ export interface TerminalState {
   lineHeight: number; // Line height multiplier for terminal text
   maxSessions: number; // Maximum concurrent terminal sessions (server setting)
   lastActiveProjectPath: string | null; // Last project path to detect route changes vs project switches
+  openTerminalMode: 'newTab' | 'split'; // How to open terminals from "Open in Terminal" action
 }
 
 // Persisted terminal layout - now includes sessionIds for reconnection
 // Used to restore terminal layout structure when switching projects
 export type PersistedTerminalPanel =
-  | { type: 'terminal'; size?: number; fontSize?: number; sessionId?: string }
+  | { type: 'terminal'; size?: number; fontSize?: number; sessionId?: string; branchName?: string }
   | {
       type: 'split';
       id?: string; // Optional for backwards compatibility with older persisted layouts
@@ -575,6 +576,7 @@ export interface PersistedTerminalSettings {
   scrollbackLines: number;
   lineHeight: number;
   maxSessions: number;
+  openTerminalMode: 'newTab' | 'split';
 }
 
 /** State for worktree init script execution */
@@ -728,6 +730,9 @@ export interface AppState {
 
   // Editor Configuration
   defaultEditorCommand: string | null; // Default editor for "Open In" action
+
+  // Terminal Configuration
+  defaultTerminalId: string | null; // Default external terminal for "Open In Terminal" action (null = integrated)
 
   // Skills Configuration
   enableSkills: boolean; // Enable Skills functionality (loads from .claude/skills/ directories)
@@ -1171,6 +1176,9 @@ export interface AppActions {
   // Editor Configuration actions
   setDefaultEditorCommand: (command: string | null) => void;
 
+  // Terminal Configuration actions
+  setDefaultTerminalId: (terminalId: string | null) => void;
+
   // Prompt Customization actions
   setPromptCustomization: (customization: PromptCustomization) => Promise<void>;
 
@@ -1227,7 +1235,8 @@ export interface AppActions {
   addTerminalToLayout: (
     sessionId: string,
     direction?: 'horizontal' | 'vertical',
-    targetSessionId?: string
+    targetSessionId?: string,
+    branchName?: string
   ) => void;
   removeTerminalFromLayout: (sessionId: string) => void;
   swapTerminals: (sessionId1: string, sessionId2: string) => void;
@@ -1241,6 +1250,7 @@ export interface AppActions {
   setTerminalLineHeight: (lineHeight: number) => void;
   setTerminalMaxSessions: (maxSessions: number) => void;
   setTerminalLastActiveProjectPath: (projectPath: string | null) => void;
+  setOpenTerminalMode: (mode: 'newTab' | 'split') => void;
   addTerminalTab: (name?: string) => string;
   removeTerminalTab: (tabId: string) => void;
   setActiveTerminalTab: (tabId: string) => void;
@@ -1250,7 +1260,8 @@ export interface AppActions {
   addTerminalToTab: (
     sessionId: string,
     tabId: string,
-    direction?: 'horizontal' | 'vertical'
+    direction?: 'horizontal' | 'vertical',
+    branchName?: string
   ) => void;
   setTerminalTabLayout: (
     tabId: string,
@@ -1405,12 +1416,12 @@ const initialState: AppState = {
   muteDoneSound: false, // Default to sound enabled (not muted)
   serverLogLevel: 'info', // Default to info level for server logs
   enableRequestLogging: true, // Default to enabled for HTTP request logging
-  enhancementModel: 'sonnet', // Default to sonnet for feature enhancement
-  validationModel: 'opus', // Default to opus for GitHub issue validation
+  enhancementModel: 'claude-sonnet', // Default to sonnet for feature enhancement
+  validationModel: 'claude-opus', // Default to opus for GitHub issue validation
   phaseModels: DEFAULT_PHASE_MODELS, // Phase-specific model configuration
   favoriteModels: [],
   enabledCursorModels: getAllCursorModelIds(), // All Cursor models enabled by default
-  cursorDefaultModel: 'auto', // Default to auto selection
+  cursorDefaultModel: 'cursor-auto', // Default to auto selection
   enabledCodexModels: getAllCodexModelIds(), // All Codex models enabled by default
   codexDefaultModel: 'codex-gpt-5.2-codex', // Default to GPT-5.2-Codex
   codexAutoLoadAgents: false, // Default to disabled (user must opt-in)
@@ -1432,6 +1443,7 @@ const initialState: AppState = {
   skipSandboxWarning: false, // Default to disabled (show sandbox warning dialog)
   mcpServers: [], // No MCP servers configured by default
   defaultEditorCommand: null, // Auto-detect: Cursor > VS Code > first available
+  defaultTerminalId: null, // Integrated terminal by default
   enableSkills: true, // Skills enabled by default
   skillsSources: ['user', 'project'] as Array<'user' | 'project'>, // Load from both sources by default
   enableSubagents: true, // Subagents enabled by default
@@ -1459,6 +1471,7 @@ const initialState: AppState = {
     lineHeight: 1.0,
     maxSessions: 100,
     lastActiveProjectPath: null,
+    openTerminalMode: 'newTab',
   },
   terminalLayoutByProject: {},
   specCreatingForProject: null,
@@ -1518,7 +1531,16 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   moveProjectToTrash: (projectId) => {
     const project = get().projects.find((p) => p.id === projectId);
-    if (!project) return;
+    if (!project) {
+      console.warn('[MOVE_TO_TRASH] Project not found:', projectId);
+      return;
+    }
+
+    console.log('[MOVE_TO_TRASH] Moving project to trash:', {
+      projectId,
+      projectName: project.name,
+      currentProjectCount: get().projects.length,
+    });
 
     const remainingProjects = get().projects.filter((p) => p.id !== projectId);
     const existingTrash = get().trashedProjects.filter((p) => p.id !== projectId);
@@ -1530,6 +1552,11 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     const isCurrent = get().currentProject?.id === projectId;
     const nextCurrentProject = isCurrent ? null : get().currentProject;
+
+    console.log('[MOVE_TO_TRASH] Updating store with new state:', {
+      newProjectCount: remainingProjects.length,
+      newTrashedCount: [trashedProject, ...existingTrash].length,
+    });
 
     set({
       projects: remainingProjects,
@@ -1627,16 +1654,18 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       const updatedProjects = projects.map((p) => (p.id === existingProject.id ? project : p));
       set({ projects: updatedProjects });
     } else {
-      // Create new project - check for trashed project with same path first (preserves theme if deleted/recreated)
-      // Then fall back to provided theme, then current project theme, then global theme
+      // Create new project - only set theme if explicitly provided or recovering from trash
+      // Otherwise leave undefined so project uses global theme ("Use Global Theme" checked)
       const trashedProject = trashedProjects.find((p) => p.path === path);
-      const effectiveTheme = theme || trashedProject?.theme || currentProject?.theme || globalTheme;
+      const projectTheme =
+        theme !== undefined ? theme : (trashedProject?.theme as ThemeMode | undefined);
+
       project = {
         id: `project-${Date.now()}`,
         name,
         path,
         lastOpened: new Date().toISOString(),
-        theme: effectiveTheme,
+        theme: projectTheme, // May be undefined - intentional!
       };
       // Add the new project to the store
       set({
@@ -2431,6 +2460,8 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   // Editor Configuration actions
   setDefaultEditorCommand: (command) => set({ defaultEditorCommand: command }),
+  // Terminal Configuration actions
+  setDefaultTerminalId: (terminalId) => set({ defaultTerminalId: terminalId }),
   // Prompt Customization actions
   setPromptCustomization: async (customization) => {
     set({ promptCustomization: customization });
@@ -2715,12 +2746,13 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     });
   },
 
-  addTerminalToLayout: (sessionId, direction = 'horizontal', targetSessionId) => {
+  addTerminalToLayout: (sessionId, direction = 'horizontal', targetSessionId, branchName) => {
     const current = get().terminalState;
     const newTerminal: TerminalPanelContent = {
       type: 'terminal',
       sessionId,
       size: 50,
+      branchName,
     };
 
     // If no tabs, create first tab
@@ -2733,7 +2765,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
             {
               id: newTabId,
               name: 'Terminal 1',
-              layout: { type: 'terminal', sessionId, size: 100 },
+              layout: { type: 'terminal', sessionId, size: 100, branchName },
             },
           ],
           activeTabId: newTabId,
@@ -2808,7 +2840,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     let newLayout: TerminalPanelContent;
     if (!activeTab.layout) {
-      newLayout = { type: 'terminal', sessionId, size: 100 };
+      newLayout = { type: 'terminal', sessionId, size: 100, branchName };
     } else if (targetSessionId) {
       newLayout = splitTargetTerminal(activeTab.layout, targetSessionId, direction);
     } else {
@@ -2938,6 +2970,8 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         maxSessions: current.maxSessions,
         // Preserve lastActiveProjectPath - it will be updated separately when needed
         lastActiveProjectPath: current.lastActiveProjectPath,
+        // Preserve openTerminalMode - user preference
+        openTerminalMode: current.openTerminalMode,
       },
     });
   },
@@ -3026,6 +3060,13 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     const current = get().terminalState;
     set({
       terminalState: { ...current, lastActiveProjectPath: projectPath },
+    });
+  },
+
+  setOpenTerminalMode: (mode) => {
+    const current = get().terminalState;
+    set({
+      terminalState: { ...current, openTerminalMode: mode },
     });
   },
 
@@ -3271,7 +3312,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     });
   },
 
-  addTerminalToTab: (sessionId, tabId, direction = 'horizontal') => {
+  addTerminalToTab: (sessionId, tabId, direction = 'horizontal', branchName) => {
     const current = get().terminalState;
     const tab = current.tabs.find((t) => t.id === tabId);
     if (!tab) return;
@@ -3280,11 +3321,12 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       type: 'terminal',
       sessionId,
       size: 50,
+      branchName,
     };
     let newLayout: TerminalPanelContent;
 
     if (!tab.layout) {
-      newLayout = { type: 'terminal', sessionId, size: 100 };
+      newLayout = { type: 'terminal', sessionId, size: 100, branchName };
     } else if (tab.layout.type === 'terminal') {
       newLayout = {
         type: 'split',
@@ -3416,6 +3458,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
           size: panel.size,
           fontSize: panel.fontSize,
           sessionId: panel.sessionId, // Preserve for reconnection
+          branchName: panel.branchName, // Preserve branch name for display
         };
       }
       return {

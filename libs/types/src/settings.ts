@@ -541,6 +541,10 @@ export interface GlobalSettings {
   /** Terminal font family (undefined = use default Menlo/Monaco) */
   terminalFontFamily?: string;
 
+  // Terminal Configuration
+  /** How to open terminals from "Open in Terminal" worktree action */
+  openTerminalMode?: 'newTab' | 'split';
+
   // UI State Preferences
   /** Whether sidebar is currently open */
   sidebarOpen: boolean;
@@ -668,6 +672,10 @@ export interface GlobalSettings {
   // Editor Configuration
   /** Default editor command for "Open In" action (null = auto-detect: Cursor > VS Code > first available) */
   defaultEditorCommand: string | null;
+
+  // Terminal Configuration
+  /** Default external terminal ID for "Open In Terminal" action (null = integrated terminal) */
+  defaultTerminalId: string | null;
 
   // Prompt Customization
   /** Custom prompts for Auto Mode, Agent Runner, Backlog Planning, and Enhancements */
@@ -859,34 +867,42 @@ export interface ProjectSettings {
    * Value: agent configuration
    */
   customSubagents?: Record<string, import('./provider.js').AgentDefinition>;
+
+  // Auto Mode Configuration (per-project)
+  /** Whether auto mode is enabled for this project (backend-controlled loop) */
+  automodeEnabled?: boolean;
+  /** Maximum concurrent agents for this project (overrides global maxConcurrency) */
+  maxConcurrentAgents?: number;
 }
 
 /**
  * Default values and constants
  */
 
-/** Default phase model configuration - sensible defaults for each task type */
+/** Default phase model configuration - sensible defaults for each task type
+ * Uses canonical prefixed model IDs for consistent routing.
+ */
 export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
   // Quick tasks - use fast models for speed and cost
-  enhancementModel: { model: 'sonnet' },
-  fileDescriptionModel: { model: 'haiku' },
-  imageDescriptionModel: { model: 'haiku' },
+  enhancementModel: { model: 'claude-sonnet' },
+  fileDescriptionModel: { model: 'claude-haiku' },
+  imageDescriptionModel: { model: 'claude-haiku' },
 
   // Validation - use smart models for accuracy
-  validationModel: { model: 'sonnet' },
+  validationModel: { model: 'claude-sonnet' },
 
   // Generation - use powerful models for quality
-  specGenerationModel: { model: 'opus' },
-  featureGenerationModel: { model: 'sonnet' },
-  backlogPlanningModel: { model: 'sonnet' },
-  projectAnalysisModel: { model: 'sonnet' },
-  suggestionsModel: { model: 'sonnet' },
+  specGenerationModel: { model: 'claude-opus' },
+  featureGenerationModel: { model: 'claude-sonnet' },
+  backlogPlanningModel: { model: 'claude-sonnet' },
+  projectAnalysisModel: { model: 'claude-sonnet' },
+  suggestionsModel: { model: 'claude-sonnet' },
 
   // Memory - use fast model for learning extraction (cost-effective)
-  memoryExtractionModel: { model: 'haiku' },
+  memoryExtractionModel: { model: 'claude-haiku' },
 
   // Commit messages - use fast model for speed
-  commitMessageModel: { model: 'haiku' },
+  commitMessageModel: { model: 'claude-haiku' },
 };
 
 /** Current version of the global settings schema */
@@ -936,18 +952,18 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   useWorktrees: true,
   defaultPlanningMode: 'skip',
   defaultRequirePlanApproval: false,
-  defaultFeatureModel: { model: 'opus' },
+  defaultFeatureModel: { model: 'claude-opus' }, // Use canonical ID
   muteDoneSound: false,
   serverLogLevel: 'info',
   enableRequestLogging: true,
   enableAiCommitMessages: true,
   phaseModels: DEFAULT_PHASE_MODELS,
-  enhancementModel: 'sonnet',
-  validationModel: 'opus',
-  enabledCursorModels: getAllCursorModelIds(),
-  cursorDefaultModel: 'auto',
-  enabledOpencodeModels: getAllOpencodeModelIds(),
-  opencodeDefaultModel: DEFAULT_OPENCODE_MODEL,
+  enhancementModel: 'sonnet', // Legacy alias still supported
+  validationModel: 'opus', // Legacy alias still supported
+  enabledCursorModels: getAllCursorModelIds(), // Returns prefixed IDs
+  cursorDefaultModel: 'cursor-auto', // Use canonical prefixed ID
+  enabledOpencodeModels: getAllOpencodeModelIds(), // Returns prefixed IDs
+  opencodeDefaultModel: DEFAULT_OPENCODE_MODEL, // Already prefixed
   enabledDynamicModelIds: [],
   disabledProviders: [],
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
@@ -971,6 +987,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   codexThreadId: undefined,
   mcpServers: [],
   defaultEditorCommand: null,
+  defaultTerminalId: null,
   enableSkills: true,
   skillsSources: ['user', 'project'],
   enableSubagents: true,
