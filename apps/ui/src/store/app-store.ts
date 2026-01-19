@@ -2539,12 +2539,43 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   deleteClaudeApiProfile: async (id) => {
     const currentActiveId = get().activeClaudeApiProfileId;
+    const projects = get().projects;
+
+    // Find projects that have per-project override referencing the deleted profile
+    const affectedProjects = projects.filter((p) => p.activeClaudeApiProfileId === id);
+
+    // Update state: remove profile and clear references
     set({
       claudeApiProfiles: get().claudeApiProfiles.filter((p) => p.id !== id),
-      // Clear active if the deleted profile was active
+      // Clear global active if the deleted profile was active
       activeClaudeApiProfileId: currentActiveId === id ? null : currentActiveId,
+      // Clear per-project overrides that reference the deleted profile
+      projects: projects.map((p) =>
+        p.activeClaudeApiProfileId === id ? { ...p, activeClaudeApiProfileId: undefined } : p
+      ),
     });
-    // Sync immediately to persist deletion
+
+    // Also update currentProject if it was using the deleted profile
+    const currentProject = get().currentProject;
+    if (currentProject?.activeClaudeApiProfileId === id) {
+      set({
+        currentProject: { ...currentProject, activeClaudeApiProfileId: undefined },
+      });
+    }
+
+    // Persist per-project changes to server (use __USE_GLOBAL__ marker)
+    const httpClient = getHttpApiClient();
+    await Promise.all(
+      affectedProjects.map((project) =>
+        httpClient.settings
+          .updateProject(project.path, { activeClaudeApiProfileId: '__USE_GLOBAL__' })
+          .catch((error) => {
+            console.error(`Failed to clear profile override for project ${project.name}:`, error);
+          })
+      )
+    );
+
+    // Sync global settings to persist deletion
     const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
     await syncSettingsToServer();
   },

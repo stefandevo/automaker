@@ -245,6 +245,7 @@ export function useBoardActions({
       updateFeature,
       saveCategory,
       currentProject,
+      projectPath,
       onWorktreeCreated,
       onWorktreeAutoSelect,
       getPrimaryWorktreeBranch,

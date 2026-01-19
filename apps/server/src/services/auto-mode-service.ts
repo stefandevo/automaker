@@ -3267,6 +3267,7 @@ After generating the revised spec, output:
                           abortController,
                           mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
                           claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+                          credentials, // Pass credentials for resolving 'credentials' apiKeySource
                         });
 
                         let revisionText = '';
@@ -3413,6 +3414,7 @@ After generating the revised spec, output:
                       abortController,
                       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
                       claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+                      credentials, // Pass credentials for resolving 'credentials' apiKeySource
                     });
 
                     let taskOutput = '';
@@ -3508,6 +3510,7 @@ After generating the revised spec, output:
                     abortController,
                     mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
                     claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+                    credentials, // Pass credentials for resolving 'credentials' apiKeySource
                   });
 
                   for await (const msg of continuationStream) {
