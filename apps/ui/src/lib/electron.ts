@@ -479,7 +479,8 @@ export interface FeaturesAPI {
     featureId: string
   ) => Promise<{ success: boolean; content?: string | null; error?: string }>;
   generateTitle: (
-    description: string
+    description: string,
+    projectPath?: string
   ) => Promise<{ success: boolean; title?: string; error?: string }>;
 }
 
@@ -706,7 +707,8 @@ export interface ElectronAPI {
       originalText: string,
       enhancementMode: string,
       model?: string,
-      thinkingLevel?: string
+      thinkingLevel?: string,
+      projectPath?: string
     ) => Promise<{
       success: boolean;
       enhancedText?: string;
@@ -3173,7 +3175,7 @@ function createMockFeaturesAPI(): FeaturesAPI {
       return { success: true, content: content || null };
     },
 
-    generateTitle: async (description: string) => {
+    generateTitle: async (description: string, _projectPath?: string) => {
       console.log('[Mock] Generating title for:', description.substring(0, 50));
       // Mock title generation - just take first few words
       const words = description.split(/\s+/).slice(0, 6).join(' ');

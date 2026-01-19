@@ -19,6 +19,7 @@ const logger = createLogger('GenerateTitle');
 
 interface GenerateTitleRequestBody {
   description: string;
+  projectPath?: string;
 }
 
 interface GenerateTitleSuccessResponse {
@@ -36,7 +37,7 @@ export function createGenerateTitleHandler(
 ): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { description } = req.body as GenerateTitleRequestBody;
+      const { description, projectPath } = req.body as GenerateTitleRequestBody;
 
       if (!description || typeof description !== 'string') {
         const response: GenerateTitleErrorResponse = {
@@ -64,9 +65,11 @@ export function createGenerateTitleHandler(
       const systemPrompt = prompts.titleGeneration.systemPrompt;
 
       // Get active Claude API profile for alternative endpoint configuration
+      // Uses project-specific profile if projectPath provided, otherwise global
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         settingsService,
-        '[GenerateTitle]'
+        '[GenerateTitle]',
+        projectPath
       );
 
       const userPrompt = `Generate a concise title for this feature:\n\n${trimmedDescription}`;
