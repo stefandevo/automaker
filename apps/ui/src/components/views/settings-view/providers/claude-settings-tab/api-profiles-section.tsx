@@ -166,7 +166,10 @@ export function ApiProfilesSection() {
       // Only include apiKey when source is 'inline'
       apiKey: formData.apiKeySource === 'inline' ? formData.apiKey : undefined,
       useAuthToken: formData.useAuthToken,
-      timeoutMs: formData.timeoutMs ? parseInt(formData.timeoutMs, 10) : undefined,
+      timeoutMs: (() => {
+        const parsed = Number(formData.timeoutMs);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      })(),
       modelMappings:
         formData.modelMappings.haiku || formData.modelMappings.sonnet || formData.modelMappings.opus
           ? {
