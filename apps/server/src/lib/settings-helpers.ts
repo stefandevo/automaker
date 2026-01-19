@@ -360,16 +360,19 @@ export interface ActiveClaudeApiProfileResult {
 }
 
 /**
- * Get the active Claude API profile and credentials from global settings.
+ * Get the active Claude API profile and credentials from settings.
+ * Checks project settings first for per-project overrides, then falls back to global settings.
  * Returns both the profile and credentials for resolving 'credentials' apiKeySource.
  *
  * @param settingsService - Optional settings service instance
  * @param logPrefix - Prefix for log messages (e.g., '[AgentService]')
+ * @param projectPath - Optional project path for per-project override
  * @returns Promise resolving to object with profile and credentials
  */
 export async function getActiveClaudeApiProfile(
   settingsService?: SettingsService | null,
-  logPrefix = '[SettingsHelper]'
+  logPrefix = '[SettingsHelper]',
+  projectPath?: string
 ): Promise<ActiveClaudeApiProfileResult> {
   if (!settingsService) {
     return { profile: undefined, credentials: undefined };
@@ -379,10 +382,30 @@ export async function getActiveClaudeApiProfile(
     const globalSettings = await settingsService.getGlobalSettings();
     const credentials = await settingsService.getCredentials();
     const profiles = globalSettings.claudeApiProfiles || [];
-    const activeProfileId = globalSettings.activeClaudeApiProfileId;
+
+    // Check for project-level override first
+    let activeProfileId: string | null | undefined;
+    let isProjectOverride = false;
+
+    if (projectPath) {
+      const projectSettings = await settingsService.getProjectSettings(projectPath);
+      // undefined = use global, null = explicit no profile, string = specific profile
+      if (projectSettings.activeClaudeApiProfileId !== undefined) {
+        activeProfileId = projectSettings.activeClaudeApiProfileId;
+        isProjectOverride = true;
+      }
+    }
+
+    // Fall back to global if project doesn't specify
+    if (activeProfileId === undefined && !isProjectOverride) {
+      activeProfileId = globalSettings.activeClaudeApiProfileId;
+    }
 
     // No active profile selected - use direct Anthropic API
     if (!activeProfileId) {
+      if (isProjectOverride && activeProfileId === null) {
+        logger.info(`${logPrefix} Project explicitly using Direct Anthropic API`);
+      }
       return { profile: undefined, credentials };
     }
 
@@ -390,7 +413,8 @@ export async function getActiveClaudeApiProfile(
     const activeProfile = profiles.find((p) => p.id === activeProfileId);
 
     if (activeProfile) {
-      logger.info(`${logPrefix} Using Claude API profile: ${activeProfile.name}`);
+      const overrideSuffix = isProjectOverride ? ' (project override)' : '';
+      logger.info(`${logPrefix} Using Claude API profile: ${activeProfile.name}${overrideSuffix}`);
       return { profile: activeProfile, credentials };
     } else {
       logger.warn(

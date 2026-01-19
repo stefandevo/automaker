@@ -373,6 +373,71 @@ npm run dev:web
 npm run test:server
 ```
 
+## Per-Project Profile Override
+
+Projects can override the global Claude API profile selection, allowing different projects to use different endpoints or configurations.
+
+### Configuration
+
+In **Project Settings → Claude**, users can select:
+
+| Option                   | Behavior                                                           |
+| ------------------------ | ------------------------------------------------------------------ |
+| **Use Global Setting**   | Inherits the active profile from global settings (default)         |
+| **Direct Anthropic API** | Explicitly uses direct Anthropic API, bypassing any global profile |
+| **\<Profile Name\>**     | Uses that specific profile for this project only                   |
+
+### Storage
+
+The per-project setting is stored in `.automaker/settings.json`:
+
+```json
+{
+  "activeClaudeApiProfileId": "profile-id-here"
+}
+```
+
+- `undefined` (or key absent): Use global setting
+- `null`: Explicitly use Direct Anthropic API
+- `"<id>"`: Use specific profile by ID
+
+### Implementation
+
+The `getActiveClaudeApiProfile()` function accepts an optional `projectPath` parameter:
+
+```typescript
+export async function getActiveClaudeApiProfile(
+  settingsService?: SettingsService | null,
+  logPrefix = '[SettingsHelper]',
+  projectPath?: string // Optional: check project settings first
+): Promise<ActiveClaudeApiProfileResult>;
+```
+
+When `projectPath` is provided:
+
+1. Project settings are checked first for `activeClaudeApiProfileId`
+2. If project has a value (including `null`), that takes precedence
+3. If project has no override (`undefined`), falls back to global setting
+
+### Scope
+
+**Important:** Per-project profiles only affect Claude model calls. When other providers are used (Codex, OpenCode, Cursor), the Claude API profile setting has no effect—those providers use their own configuration.
+
+Affected operations when using Claude models:
+
+- Agent chat and feature implementation
+- Code analysis and suggestions
+- Commit message generation
+- Spec generation and sync
+- Issue validation
+- Backlog planning
+
+### Use Cases
+
+1. **Experimentation**: Test z.AI GLM or MiniMax on a side project while keeping production projects on Direct Anthropic
+2. **Cost optimization**: Use cheaper endpoints for hobby projects, premium for work projects
+3. **Regional compliance**: Use China endpoints for projects with data residency requirements
+
 ## Future Enhancements
 
 Potential future improvements:

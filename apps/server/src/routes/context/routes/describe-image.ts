@@ -288,7 +288,8 @@ export function createDescribeImageHandler(
       // Get active Claude API profile for alternative endpoint configuration
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         settingsService,
-        '[DescribeImage]'
+        '[DescribeImage]',
+        cwd
       );
 
       // Build the instruction text from centralized prompts

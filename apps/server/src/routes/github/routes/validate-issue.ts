@@ -172,7 +172,8 @@ ${basePrompt}`;
     // Get active Claude API profile for alternative endpoint configuration
     const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
       settingsService,
-      '[IssueValidation]'
+      '[IssueValidation]',
+      projectPath
     );
 
     // Use streamingQuery with event callbacks

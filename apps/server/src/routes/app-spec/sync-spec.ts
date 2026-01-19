@@ -163,7 +163,8 @@ export async function syncSpec(
   // Get active Claude API profile for alternative endpoint configuration
   const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
     settingsService,
-    '[SpecSync]'
+    '[SpecSync]',
+    projectPath
   );
 
   // Use AI to analyze tech stack

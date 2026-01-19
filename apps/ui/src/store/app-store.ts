@@ -2,6 +2,7 @@ import { create } from 'zustand';
 // Note: persist middleware removed - settings now sync via API (use-settings-sync.ts)
 import type { Project, TrashedProject } from '@/lib/electron';
 import { getElectronAPI } from '@/lib/electron';
+import { getHttpApiClient } from '@/lib/http-api-client';
 import { createLogger } from '@automaker/utils/logger';
 import { setItem, getItem } from '@/lib/storage';
 import {
@@ -1035,6 +1036,9 @@ export interface AppActions {
   getEffectiveFontSans: () => string | null; // Get effective UI font (project override -> global -> null for default)
   getEffectiveFontMono: () => string | null; // Get effective code font (project override -> global -> null for default)
 
+  // Claude API Profile actions (per-project override)
+  setProjectClaudeApiProfile: (projectId: string, profileId: string | null | undefined) => void; // Set per-project Claude API profile (undefined = use global, null = direct API, string = specific profile)
+
   // Feature actions
   setFeatures: (features: Feature[]) => void;
   updateFeature: (id: string, updates: Partial<Feature>) => void;
@@ -1948,6 +1952,44 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   getEffectiveFontMono: () => {
     const { currentProject, fontFamilyMono } = get();
     return getEffectiveFont(currentProject?.fontFamilyMono, fontFamilyMono, UI_MONO_FONT_OPTIONS);
+  },
+
+  // Claude API Profile actions (per-project override)
+  setProjectClaudeApiProfile: (projectId, profileId) => {
+    // Find the project to get its path for server sync
+    const project = get().projects.find((p) => p.id === projectId);
+    if (!project) {
+      console.error('Cannot set Claude API profile: project not found');
+      return;
+    }
+
+    // Update the project's activeClaudeApiProfileId property
+    // undefined means "use global", null means "explicit direct API", string means specific profile
+    const projects = get().projects.map((p) =>
+      p.id === projectId ? { ...p, activeClaudeApiProfileId: profileId } : p
+    );
+    set({ projects });
+
+    // Also update currentProject if it's the same project
+    const currentProject = get().currentProject;
+    if (currentProject?.id === projectId) {
+      set({
+        currentProject: {
+          ...currentProject,
+          activeClaudeApiProfileId: profileId,
+        },
+      });
+    }
+
+    // Persist to server
+    const httpClient = getHttpApiClient();
+    httpClient.settings
+      .updateProject(project.path, {
+        activeClaudeApiProfileId: profileId,
+      })
+      .catch((error) => {
+        console.error('Failed to persist activeClaudeApiProfileId:', error);
+      });
   },
 
   // Feature actions

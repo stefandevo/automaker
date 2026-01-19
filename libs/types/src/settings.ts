@@ -938,6 +938,15 @@ export interface ProjectSettings {
   automodeEnabled?: boolean;
   /** Maximum concurrent agents for this project (overrides global maxConcurrency) */
   maxConcurrentAgents?: number;
+
+  // Claude API Profile Override (per-project)
+  /**
+   * Override the active Claude API profile for this project.
+   * - undefined: Use global setting (activeClaudeApiProfileId)
+   * - null: Explicitly use Direct Anthropic API (no profile)
+   * - string: Use specific profile by ID
+   */
+  activeClaudeApiProfileId?: string | null;
 }
 
 /**

@@ -226,7 +226,8 @@ export class IdeationService {
       // Get active Claude API profile for alternative endpoint configuration
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         this.settingsService,
-        '[IdeationService]'
+        '[IdeationService]',
+        projectPath
       );
 
       const executeOptions: ExecuteOptions = {
@@ -689,7 +690,8 @@ export class IdeationService {
       // Get active Claude API profile for alternative endpoint configuration
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         this.settingsService,
-        '[IdeationService]'
+        '[IdeationService]',
+        projectPath
       );
 
       const executeOptions: ExecuteOptions = {

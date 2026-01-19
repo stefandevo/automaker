@@ -171,7 +171,8 @@ export function createGenerateCommitMessageHandler(
       // Get active Claude API profile for alternative endpoint configuration
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         settingsService,
-        '[GenerateCommitMessage]'
+        '[GenerateCommitMessage]',
+        worktreePath
       );
 
       // Get provider for the model type

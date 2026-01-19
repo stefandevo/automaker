@@ -169,7 +169,8 @@ ${contentToAnalyze}`;
       // Get active Claude API profile for alternative endpoint configuration
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         settingsService,
-        '[DescribeFile]'
+        '[DescribeFile]',
+        cwd
       );
 
       // Use simpleQuery - provider abstraction handles routing to correct provider

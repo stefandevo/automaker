@@ -278,7 +278,8 @@ export class AgentService {
       // Get active Claude API profile for alternative endpoint configuration
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         this.settingsService,
-        '[AgentService]'
+        '[AgentService]',
+        effectiveWorkDir
       );
 
       // Load project context files (CLAUDE.md, CODE_QUALITY.md, etc.) and memory files

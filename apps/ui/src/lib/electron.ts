@@ -3349,6 +3349,13 @@ export interface Project {
   isFavorite?: boolean; // Pin project to top of dashboard
   icon?: string; // Lucide icon name for project identification
   customIconPath?: string; // Path to custom uploaded icon image in .automaker/images/
+  /**
+   * Override the active Claude API profile for this project.
+   * - undefined: Use global setting (activeClaudeApiProfileId)
+   * - null: Explicitly use Direct Anthropic API (no profile)
+   * - string: Use specific profile by ID
+   */
+  activeClaudeApiProfileId?: string | null;
 }
 
 export interface TrashedProject extends Project {

@@ -199,7 +199,8 @@ ${prompts.suggestions.baseTemplate}`;
   // Get active Claude API profile for alternative endpoint configuration
   const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
     settingsService,
-    '[Suggestions]'
+    '[Suggestions]',
+    projectPath
   );
 
   let responseText = '';

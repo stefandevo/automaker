@@ -2061,7 +2061,8 @@ Format your response as a structured markdown document.`;
       // Get active Claude API profile for alternative endpoint configuration
       const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
         this.settingsService,
-        '[AutoMode]'
+        '[AutoMode]',
+        projectPath
       );
 
       const options: ExecuteOptions = {
@@ -2946,7 +2947,8 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
     // Get active Claude API profile for alternative endpoint configuration
     const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
       this.settingsService,
-      '[AutoMode]'
+      '[AutoMode]',
+      finalProjectPath
     );
 
     const executeOptions: ExecuteOptions = {

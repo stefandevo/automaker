@@ -168,7 +168,8 @@ ${userPrompt}`;
     // Get active Claude API profile for alternative endpoint configuration
     const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
       settingsService,
-      '[BacklogPlan]'
+      '[BacklogPlan]',
+      projectPath
     );
 
     // Execute the query

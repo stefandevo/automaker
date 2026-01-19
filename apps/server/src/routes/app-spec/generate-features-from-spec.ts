@@ -130,7 +130,8 @@ Generate ${featureCount} NEW features that build on each other logically. Rememb
   // Get active Claude API profile for alternative endpoint configuration
   const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
     settingsService,
-    '[FeatureGeneration]'
+    '[FeatureGeneration]',
+    projectPath
   );
 
   // Use streamingQuery with event callbacks

@@ -107,7 +107,8 @@ ${prompts.appSpec.structuredSpecInstructions}`;
   // Get active Claude API profile for alternative endpoint configuration
   const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
     settingsService,
-    '[SpecRegeneration]'
+    '[SpecRegeneration]',
+    projectPath
   );
 
   let responseText = '';
