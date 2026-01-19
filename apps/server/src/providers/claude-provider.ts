@@ -123,24 +123,24 @@ function buildEnv(
       env['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'] = '1';
     }
   } else {
-    // Use direct Anthropic API - two modes:
+    // Use direct Anthropic API - pass through environment variables if set
+    // This supports:
     // 1. API Key mode: ANTHROPIC_API_KEY from credentials/env
     // 2. Claude Max plan: Uses CLI OAuth auth (SDK handles this automatically)
+    // 3. Custom endpoints via ANTHROPIC_BASE_URL env var (backward compatibility)
     //
-    // IMPORTANT: Do NOT set any profile vars (base URL, model mappings, etc.)
-    // This ensures clean switching - only pass through what's in process.env
+    // Note: Only auth and endpoint vars are passed. Model mappings and traffic
+    // control are NOT passed (those require a profile for explicit configuration).
     if (process.env.ANTHROPIC_API_KEY) {
       env['ANTHROPIC_API_KEY'] = process.env.ANTHROPIC_API_KEY;
     }
-    // If using Claude Max plan via CLI auth, the SDK handles auth automatically
-    // when no API key is provided. We don't set ANTHROPIC_AUTH_TOKEN here
-    // unless it was explicitly set in process.env (rare edge case).
     if (process.env.ANTHROPIC_AUTH_TOKEN) {
       env['ANTHROPIC_AUTH_TOKEN'] = process.env.ANTHROPIC_AUTH_TOKEN;
     }
-    // Do NOT set ANTHROPIC_BASE_URL - let SDK use default Anthropic endpoint
-    // Do NOT set model mappings - use standard Claude model names
-    // Do NOT set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+    // Pass through ANTHROPIC_BASE_URL if set in environment (backward compatibility)
+    if (process.env.ANTHROPIC_BASE_URL) {
+      env['ANTHROPIC_BASE_URL'] = process.env.ANTHROPIC_BASE_URL;
+    }
   }
 
   // Always add system vars from process.env
