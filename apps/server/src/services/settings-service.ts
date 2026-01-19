@@ -633,6 +633,12 @@ export class SettingsService {
       };
     }
 
+    // Handle explicit undefined for activeClaudeApiProfileId (means "use global")
+    // JavaScript spread ignores undefined values, so we need to explicitly delete
+    if ('activeClaudeApiProfileId' in updates && updates.activeClaudeApiProfileId === undefined) {
+      delete updated.activeClaudeApiProfileId;
+    }
+
     await writeSettingsJson(settingsPath, updated);
     logger.info(`Project settings updated for ${projectPath}`);
 
