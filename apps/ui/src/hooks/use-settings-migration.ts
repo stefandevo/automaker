@@ -671,6 +671,8 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     },
     mcpServers: settings.mcpServers ?? [],
     promptCustomization: settings.promptCustomization ?? {},
+    claudeApiProfiles: settings.claudeApiProfiles ?? [],
+    activeClaudeApiProfileId: settings.activeClaudeApiProfileId ?? null,
     projects,
     currentProject,
     trashedProjects: settings.trashedProjects ?? [],

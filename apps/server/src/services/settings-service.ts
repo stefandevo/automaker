@@ -407,6 +407,7 @@ export class SettingsService {
     ignoreEmptyArrayOverwrite('recentFolders');
     ignoreEmptyArrayOverwrite('mcpServers');
     ignoreEmptyArrayOverwrite('enabledCursorModels');
+    ignoreEmptyArrayOverwrite('claudeApiProfiles');
 
     // Empty object overwrite guard
     if (
