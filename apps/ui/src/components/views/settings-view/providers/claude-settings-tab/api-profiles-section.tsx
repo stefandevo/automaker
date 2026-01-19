@@ -194,11 +194,17 @@ export function ApiProfilesSection() {
     setDeleteConfirmId(null);
   };
 
+  // Check for duplicate profile name (case-insensitive, excluding current profile when editing)
+  const isDuplicateName = claudeApiProfiles.some(
+    (p) => p.name.toLowerCase() === formData.name.trim().toLowerCase() && p.id !== editingProfileId
+  );
+
   // API key is only required when source is 'inline'
   const isFormValid =
     formData.name.trim().length > 0 &&
     formData.baseUrl.trim().length > 0 &&
-    (formData.apiKeySource !== 'inline' || formData.apiKey.length > 0);
+    (formData.apiKeySource !== 'inline' || formData.apiKey.length > 0) &&
+    !isDuplicateName;
 
   return (
     <div
@@ -326,7 +332,11 @@ export function ApiProfilesSection() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., z.AI GLM"
+                className={isDuplicateName ? 'border-destructive' : ''}
               />
+              {isDuplicateName && (
+                <p className="text-xs text-destructive">A profile with this name already exists</p>
+              )}
             </div>
 
             {/* Base URL */}
