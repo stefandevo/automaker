@@ -732,6 +732,8 @@ function buildSettingsUpdateFromStore(): Record<string, unknown> {
     keyboardShortcuts: state.keyboardShortcuts,
     mcpServers: state.mcpServers,
     promptCustomization: state.promptCustomization,
+    claudeApiProfiles: state.claudeApiProfiles,
+    activeClaudeApiProfileId: state.activeClaudeApiProfileId,
     projects: state.projects,
     trashedProjects: state.trashedProjects,
     currentProjectId: state.currentProject?.id ?? null,
