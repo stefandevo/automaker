@@ -546,10 +546,10 @@ export async function getPhaseModelWithOverrides(
       }
     }
 
-    // If no phase model found, use a default
+    // If no phase model found, use per-phase default
     if (!phaseModel) {
-      phaseModel = { model: 'sonnet' };
-      logger.debug(`${logPrefix} No ${phase} configured, using default: sonnet`);
+      phaseModel = DEFAULT_PHASE_MODELS[phase] || { model: 'sonnet' };
+      logger.debug(`${logPrefix} No ${phase} configured, using default: ${phaseModel.model}`);
     }
 
     // Resolve provider if providerId is set

@@ -201,9 +201,8 @@ ${prompts.suggestions.baseTemplate}`;
         model = providerResult.resolvedModel;
       }
       credentials = providerResult.credentials ?? (await settingsService.getCredentials());
-    } else {
-      credentials = await settingsService?.getCredentials();
     }
+    // If no settingsService, credentials remains undefined (initialized above)
   } else if (settingsService) {
     // Use settings-based model with provider info
     const phaseResult = await getPhaseModelWithOverrides(

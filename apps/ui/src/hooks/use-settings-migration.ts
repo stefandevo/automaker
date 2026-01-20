@@ -208,12 +208,13 @@ export function parseLocalStorageSettings(): Partial<GlobalSettings> | null {
         worktreePanelCollapsed === 'true' || (state.worktreePanelCollapsed as boolean),
       lastProjectDir: lastProjectDir || (state.lastProjectDir as string),
       recentFolders: recentFolders ? JSON.parse(recentFolders) : (state.recentFolders as string[]),
-      // Claude API Profiles
+      // Claude API Profiles (legacy)
       claudeApiProfiles: (state.claudeApiProfiles as GlobalSettings['claudeApiProfiles']) ?? [],
       activeClaudeApiProfileId:
         (state.activeClaudeApiProfileId as GlobalSettings['activeClaudeApiProfileId']) ?? null,
-      // Event hooks
-      eventHooks: state.eventHooks as GlobalSettings['eventHooks'],
+      // Claude Compatible Providers (new system)
+      claudeCompatibleProviders:
+        (state.claudeCompatibleProviders as GlobalSettings['claudeCompatibleProviders']) ?? [],
     };
   } catch (error) {
     logger.error('Failed to parse localStorage settings:', error);
@@ -346,6 +347,16 @@ export function mergeSettings(
   // Active Claude API Profile ID - preserve from localStorage if server doesn't have one
   if (!serverSettings.activeClaudeApiProfileId && localSettings.activeClaudeApiProfileId) {
     merged.activeClaudeApiProfileId = localSettings.activeClaudeApiProfileId;
+  }
+
+  // Claude Compatible Providers - preserve from localStorage if server is empty
+  if (
+    (!serverSettings.claudeCompatibleProviders ||
+      serverSettings.claudeCompatibleProviders.length === 0) &&
+    localSettings.claudeCompatibleProviders &&
+    localSettings.claudeCompatibleProviders.length > 0
+  ) {
+    merged.claudeCompatibleProviders = localSettings.claudeCompatibleProviders;
   }
 
   return merged;

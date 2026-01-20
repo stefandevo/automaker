@@ -115,11 +115,14 @@ function PhaseOverrideItem({
         }
       }
     }
-    // Default to model ID for built-in models
+    // Default to model ID for built-in models (both short aliases and canonical IDs)
     const modelMap: Record<string, string> = {
       haiku: 'Claude Haiku',
       sonnet: 'Claude Sonnet',
       opus: 'Claude Opus',
+      'claude-haiku': 'Claude Haiku',
+      'claude-sonnet': 'Claude Sonnet',
+      'claude-opus': 'Claude Opus',
     };
     return modelMap[entry.model] || entry.model;
   };
