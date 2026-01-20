@@ -168,7 +168,7 @@ export function createGenerateCommitMessageHandler(
         worktreePath,
         '[GenerateCommitMessage]'
       );
-      const { model } = resolvePhaseModel(phaseModelEntry);
+      const { model, thinkingLevel } = resolvePhaseModel(phaseModelEntry);
 
       logger.info(
         `Using model for commit message: ${model}`,
@@ -199,6 +199,7 @@ export function createGenerateCommitMessageHandler(
         maxTurns: 1,
         allowedTools: [],
         readOnly: true,
+        thinkingLevel, // Pass thinking level for extended thinking support
         claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
         credentials, // Pass credentials for resolving 'credentials' apiKeySource
       });

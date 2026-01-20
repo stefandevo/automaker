@@ -19,6 +19,7 @@ import {
   getAutoLoadClaudeMdSetting,
   getPromptCustomization,
   getPhaseModelWithOverrides,
+  getProviderByModelId,
 } from '../../lib/settings-helpers.js';
 
 const logger = createLogger('Suggestions');
@@ -186,8 +187,23 @@ ${prompts.suggestions.baseTemplate}`;
     });
     model = resolved.model;
     thinkingLevel = resolved.thinkingLevel;
-    // For overrides, just get credentials without a specific provider
-    credentials = await settingsService?.getCredentials();
+
+    // Try to find a provider for this model (e.g., GLM, MiniMax models)
+    if (settingsService) {
+      const providerResult = await getProviderByModelId(
+        modelOverride,
+        settingsService,
+        '[Suggestions]'
+      );
+      provider = providerResult.provider;
+      // Use resolved model from provider if available (maps to Claude model)
+      if (providerResult.resolvedModel) {
+        model = providerResult.resolvedModel;
+      }
+      credentials = providerResult.credentials ?? (await settingsService.getCredentials());
+    } else {
+      credentials = await settingsService?.getCredentials();
+    }
   } else if (settingsService) {
     // Use settings-based model with provider info
     const phaseResult = await getPhaseModelWithOverrides(

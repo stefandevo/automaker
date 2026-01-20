@@ -104,10 +104,10 @@ export function ProjectClaudeSection({ project }: ProjectClaudeSectionProps) {
 
       <div className="p-6 space-y-4">
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Active Profile for This Project</Label>
+          <Label className="text-sm font-medium">Active Provider for This Project</Label>
           <Select value={selectValue} onValueChange={handleChange}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select profile" />
+              <SelectValue placeholder="Select provider" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="global">

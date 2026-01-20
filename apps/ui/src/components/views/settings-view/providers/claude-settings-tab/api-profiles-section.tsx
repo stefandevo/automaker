@@ -52,7 +52,7 @@ import { Badge } from '@/components/ui/badge';
 
 // Generate unique ID for providers
 function generateProviderId(): string {
-  return `provider-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `provider-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 // Mask API key for display (show first 4 + last 4 chars)
@@ -219,11 +219,16 @@ export function ApiProfilesSection() {
         mapsToClaudeModel: m.mapsToClaudeModel,
       }));
 
+    // Preserve enabled state when editing, default to true for new providers
+    const existingProvider = editingProviderId
+      ? claudeCompatibleProviders.find((p) => p.id === editingProviderId)
+      : undefined;
+
     const providerData: ClaudeCompatibleProvider = {
       id: editingProviderId ?? generateProviderId(),
       name: formData.name.trim(),
       providerType: formData.providerType,
-      enabled: true,
+      enabled: existingProvider?.enabled ?? true,
       baseUrl: formData.baseUrl.trim(),
       // For fixed providers, always use inline
       apiKeySource: isFixedProvider ? 'inline' : formData.apiKeySource,
