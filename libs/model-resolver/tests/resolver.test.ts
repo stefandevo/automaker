@@ -168,32 +168,38 @@ describe('model-resolver', () => {
       });
     });
 
-    describe('with unknown model keys', () => {
-      it('should return default for unknown model key', () => {
+    describe('with unknown model keys (provider models)', () => {
+      // Unknown models are now passed through unchanged to support
+      // ClaudeCompatibleProvider models like GLM-4.7, MiniMax-M2.1, etc.
+      it('should pass through unknown model key unchanged (may be provider model)', () => {
         const result = resolveModelString('unknown-model');
 
-        expect(result).toBe(DEFAULT_MODELS.claude);
+        expect(result).toBe('unknown-model');
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+          expect.stringContaining('passing through unchanged')
+        );
       });
 
-      it('should warn about unknown model key', () => {
+      it('should pass through provider-like model names', () => {
+        const glmModel = resolveModelString('GLM-4.7');
+        const minimaxModel = resolveModelString('MiniMax-M2.1');
+
+        expect(glmModel).toBe('GLM-4.7');
+        expect(minimaxModel).toBe('MiniMax-M2.1');
+      });
+
+      it('should not warn about unknown model keys (they are valid provider models)', () => {
         resolveModelString('unknown-model');
 
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown model key'));
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown-model'));
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
       });
 
-      it('should use custom default for unknown model key', () => {
+      it('should ignore custom default for unknown model key (passthrough takes precedence)', () => {
         const customDefault = 'claude-opus-4-20241113';
         const result = resolveModelString('truly-unknown-model', customDefault);
 
-        expect(result).toBe(customDefault);
-      });
-
-      it('should warn and show default being used', () => {
-        const customDefault = 'claude-custom-default';
-        resolveModelString('invalid-key', customDefault);
-
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(customDefault));
+        // Unknown models pass through unchanged, default is not used
+        expect(result).toBe('truly-unknown-model');
       });
     });
 
@@ -202,17 +208,17 @@ describe('model-resolver', () => {
         const resultUpper = resolveModelString('SONNET');
         const resultLower = resolveModelString('sonnet');
 
-        // Uppercase should not resolve (falls back to default)
-        expect(resultUpper).toBe(DEFAULT_MODELS.claude);
-        // Lowercase should resolve
+        // Uppercase is passed through (could be a provider model)
+        expect(resultUpper).toBe('SONNET');
+        // Lowercase should resolve to Claude model
         expect(resultLower).toBe(CLAUDE_MODEL_MAP.sonnet);
       });
 
       it('should handle mixed case in claude- strings', () => {
         const result = resolveModelString('Claude-Sonnet-4-20250514');
 
-        // Capital 'C' means it won't match 'claude-', falls back to default
-        expect(result).toBe(DEFAULT_MODELS.claude);
+        // Capital 'C' means it won't match 'claude-', passed through as provider model
+        expect(result).toBe('Claude-Sonnet-4-20250514');
       });
     });
 
@@ -220,14 +226,15 @@ describe('model-resolver', () => {
       it('should handle model key with whitespace', () => {
         const result = resolveModelString('  sonnet  ');
 
-        // Will not match due to whitespace, falls back to default
-        expect(result).toBe(DEFAULT_MODELS.claude);
+        // Will not match due to whitespace, passed through as-is (could be provider model)
+        expect(result).toBe('  sonnet  ');
       });
 
       it('should handle special characters in model key', () => {
         const result = resolveModelString('model@123');
 
-        expect(result).toBe(DEFAULT_MODELS.claude);
+        // Passed through as-is (could be a provider model)
+        expect(result).toBe('model@123');
       });
     });
   });
@@ -325,11 +332,11 @@ describe('model-resolver', () => {
         expect(result).toBe(CLAUDE_MODEL_MAP.opus);
       });
 
-      it('should handle fallback chain: unknown -> session -> default', () => {
-        const result = getEffectiveModel('invalid', 'also-invalid', 'claude-opus-4-20241113');
+      it('should pass through unknown model (may be provider model)', () => {
+        const result = getEffectiveModel('GLM-4.7', 'also-unknown', 'claude-opus-4-20241113');
 
-        // Both invalid models fall back to default
-        expect(result).toBe('claude-opus-4-20241113');
+        // Unknown models pass through unchanged (could be provider models)
+        expect(result).toBe('GLM-4.7');
       });
 
       it('should handle session with alias, no explicit', () => {
@@ -523,19 +530,21 @@ describe('model-resolver', () => {
         expect(result.thinkingLevel).toBeUndefined();
       });
 
-      it('should handle unknown model alias in entry', () => {
-        const entry: PhaseModelEntry = { model: 'unknown-model' as any };
+      it('should pass through unknown model in entry (may be provider model)', () => {
+        const entry: PhaseModelEntry = { model: 'GLM-4.7' as any };
         const result = resolvePhaseModel(entry);
 
-        expect(result.model).toBe(DEFAULT_MODELS.claude);
+        // Unknown models pass through unchanged (could be provider models)
+        expect(result.model).toBe('GLM-4.7');
       });
 
-      it('should use custom default for unknown model in entry', () => {
-        const entry: PhaseModelEntry = { model: 'invalid' as any, thinkingLevel: 'high' };
+      it('should pass through unknown model with thinkingLevel', () => {
+        const entry: PhaseModelEntry = { model: 'MiniMax-M2.1' as any, thinkingLevel: 'high' };
         const customDefault = 'claude-haiku-4-5-20251001';
         const result = resolvePhaseModel(entry, customDefault);
 
-        expect(result.model).toBe(customDefault);
+        // Unknown models pass through, thinkingLevel is preserved
+        expect(result.model).toBe('MiniMax-M2.1');
         expect(result.thinkingLevel).toBe('high');
       });
     });
