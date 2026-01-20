@@ -35,10 +35,10 @@ export const LIST_COLUMNS: ColumnDef[] = [
   },
   {
     id: 'priority',
-    label: '',
+    label: 'Priority',
     sortable: true,
-    width: 'w-18',
-    minWidth: 'min-w-[16px]',
+    width: 'w-20',
+    minWidth: 'min-w-[60px]',
     align: 'center',
   },
 ];
