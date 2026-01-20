@@ -68,7 +68,8 @@ import {
   filterClaudeMdFromContext,
   getMCPServersFromSettings,
   getPromptCustomization,
-  getActiveClaudeApiProfile,
+  getProviderByModelId,
+  getPhaseModelWithOverrides,
 } from '../lib/settings-helpers.js';
 import { getNotificationService } from './notification-service.js';
 
@@ -2245,13 +2246,30 @@ Address the follow-up instructions above. Review the previous work and make the 
 Format your response as a structured markdown document.`;
 
     try {
-      // Get model from phase settings
-      const settings = await this.settingsService?.getGlobalSettings();
-      const phaseModelEntry =
-        settings?.phaseModels?.projectAnalysisModel || DEFAULT_PHASE_MODELS.projectAnalysisModel;
+      // Get model from phase settings with provider info
+      const {
+        phaseModel: phaseModelEntry,
+        provider: analysisClaudeProvider,
+        credentials,
+      } = this.settingsService
+        ? await getPhaseModelWithOverrides(
+            'projectAnalysisModel',
+            this.settingsService,
+            projectPath,
+            '[AutoMode]'
+          )
+        : {
+            phaseModel: DEFAULT_PHASE_MODELS.projectAnalysisModel,
+            provider: undefined,
+            credentials: undefined,
+          };
       const { model: analysisModel, thinkingLevel: analysisThinkingLevel } =
         resolvePhaseModel(phaseModelEntry);
-      logger.info('Using model for project analysis:', analysisModel);
+      logger.info(
+        'Using model for project analysis:',
+        analysisModel,
+        analysisClaudeProvider ? `via provider: ${analysisClaudeProvider.name}` : 'direct API'
+      );
 
       const provider = ProviderFactory.getProviderForModel(analysisModel);
 
@@ -2273,13 +2291,6 @@ Format your response as a structured markdown document.`;
         thinkingLevel: analysisThinkingLevel,
       });
 
-      // Get active Claude API profile for alternative endpoint configuration
-      const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-        this.settingsService,
-        '[AutoMode]',
-        projectPath
-      );
-
       const options: ExecuteOptions = {
         prompt,
         model: sdkOptions.model ?? analysisModel,
@@ -2289,8 +2300,8 @@ Format your response as a structured markdown document.`;
         abortController,
         settingSources: sdkOptions.settingSources,
         thinkingLevel: analysisThinkingLevel, // Pass thinking level
-        claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
         credentials, // Pass credentials for resolving 'credentials' apiKeySource
+        claudeCompatibleProvider: analysisClaudeProvider, // Pass provider for alternative endpoint configuration
       };
 
       const stream = provider.executeQuery(options);
@@ -3269,16 +3280,37 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
       );
     }
 
-    // Get active Claude API profile for alternative endpoint configuration
-    const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-      this.settingsService,
-      '[AutoMode]',
-      finalProjectPath
-    );
+    // Get credentials for API calls (model comes from request, no phase model)
+    const credentials = await this.settingsService?.getCredentials();
+
+    // Try to find a provider for the model (if it's a provider model like "GLM-4.7")
+    // This allows users to select provider models in the Auto Mode / Feature execution
+    let claudeCompatibleProvider: import('@automaker/types').ClaudeCompatibleProvider | undefined;
+    let providerResolvedModel: string | undefined;
+    if (finalModel && this.settingsService) {
+      const providerResult = await getProviderByModelId(
+        finalModel,
+        this.settingsService,
+        '[AutoMode]'
+      );
+      if (providerResult.provider) {
+        claudeCompatibleProvider = providerResult.provider;
+        providerResolvedModel = providerResult.resolvedModel;
+        logger.info(
+          `[AutoMode] Using provider "${providerResult.provider.name}" for model "${finalModel}"` +
+            (providerResolvedModel ? ` -> resolved to "${providerResolvedModel}"` : '')
+        );
+      }
+    }
+
+    // Use the resolved model if available (from mapsToClaudeModel), otherwise use bareModel
+    const effectiveBareModel = providerResolvedModel
+      ? stripProviderPrefix(providerResolvedModel)
+      : bareModel;
 
     const executeOptions: ExecuteOptions = {
       prompt: promptContent,
-      model: bareModel,
+      model: effectiveBareModel,
       maxTurns: maxTurns,
       cwd: workDir,
       allowedTools: allowedTools,
@@ -3287,8 +3319,8 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
       settingSources: sdkOptions.settingSources,
       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined, // Pass MCP servers configuration
       thinkingLevel: options?.thinkingLevel, // Pass thinking level for extended thinking
-      claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
       credentials, // Pass credentials for resolving 'credentials' apiKeySource
+      claudeCompatibleProvider, // Pass provider for alternative endpoint configuration (GLM, MiniMax, etc.)
     };
 
     // Execute via provider
@@ -3591,8 +3623,8 @@ After generating the revised spec, output:
                           allowedTools: allowedTools,
                           abortController,
                           mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
-                          claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
                           credentials, // Pass credentials for resolving 'credentials' apiKeySource
+                          claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
                         });
 
                         let revisionText = '';
@@ -3738,8 +3770,8 @@ After generating the revised spec, output:
                       allowedTools: allowedTools,
                       abortController,
                       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
-                      claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
                       credentials, // Pass credentials for resolving 'credentials' apiKeySource
+                      claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
                     });
 
                     let taskOutput = '';
@@ -3834,8 +3866,8 @@ After generating the revised spec, output:
                     allowedTools: allowedTools,
                     abortController,
                     mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
-                    claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
                     credentials, // Pass credentials for resolving 'credentials' apiKeySource
+                    claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
                   });
 
                   for await (const msg of continuationStream) {

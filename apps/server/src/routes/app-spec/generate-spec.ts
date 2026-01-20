@@ -19,7 +19,7 @@ import type { SettingsService } from '../../services/settings-service.js';
 import {
   getAutoLoadClaudeMdSetting,
   getPromptCustomization,
-  getActiveClaudeApiProfile,
+  getPhaseModelWithOverrides,
 } from '../../lib/settings-helpers.js';
 
 const logger = createLogger('SpecRegeneration');
@@ -96,20 +96,26 @@ ${prompts.appSpec.structuredSpecInstructions}`;
     '[SpecRegeneration]'
   );
 
-  // Get model from phase settings
-  const settings = await settingsService?.getGlobalSettings();
-  const phaseModelEntry =
-    settings?.phaseModels?.specGenerationModel || DEFAULT_PHASE_MODELS.specGenerationModel;
+  // Get model from phase settings with provider info
+  const {
+    phaseModel: phaseModelEntry,
+    provider,
+    credentials,
+  } = settingsService
+    ? await getPhaseModelWithOverrides(
+        'specGenerationModel',
+        settingsService,
+        projectPath,
+        '[SpecRegeneration]'
+      )
+    : {
+        phaseModel: DEFAULT_PHASE_MODELS.specGenerationModel,
+        provider: undefined,
+        credentials: undefined,
+      };
   const { model, thinkingLevel } = resolvePhaseModel(phaseModelEntry);
 
-  logger.info('Using model:', model);
-
-  // Get active Claude API profile for alternative endpoint configuration
-  const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-    settingsService,
-    '[SpecRegeneration]',
-    projectPath
-  );
+  logger.info('Using model:', model, provider ? `via provider: ${provider.name}` : 'direct API');
 
   let responseText = '';
   let structuredOutput: SpecOutput | null = null;
@@ -143,7 +149,7 @@ Your entire response should be valid JSON starting with { and ending with }. No 
     thinkingLevel,
     readOnly: true, // Spec generation only reads code, we write the spec ourselves
     settingSources: autoLoadClaudeMd ? ['user', 'project', 'local'] : undefined,
-    claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+    claudeCompatibleProvider: provider, // Pass provider for alternative endpoint configuration
     credentials, // Pass credentials for resolving 'credentials' apiKeySource
     outputFormat: useStructuredOutput
       ? {

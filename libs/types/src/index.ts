@@ -161,8 +161,14 @@ export type {
   EventHookHttpAction,
   EventHookAction,
   EventHook,
-  // Claude API profile types
+  // Claude-compatible provider types (new)
   ApiKeySource,
+  ClaudeCompatibleProviderType,
+  ClaudeModelAlias,
+  ProviderModel,
+  ClaudeCompatibleProvider,
+  ClaudeCompatibleProviderTemplate,
+  // Claude API profile types (deprecated)
   ClaudeApiProfile,
   ClaudeApiProfileTemplate,
 } from './settings.js';
@@ -180,7 +186,9 @@ export {
   getThinkingTokenBudget,
   // Event hook constants
   EVENT_HOOK_TRIGGER_LABELS,
-  // Claude API profile constants
+  // Claude-compatible provider templates (new)
+  CLAUDE_PROVIDER_TEMPLATES,
+  // Claude API profile constants (deprecated)
   CLAUDE_API_PROFILE_TEMPLATES,
 } from './settings.js';
 

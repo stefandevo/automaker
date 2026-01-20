@@ -102,7 +102,7 @@ export function getThinkingTokenBudget(level: ThinkingLevel | undefined): number
 export type ModelProvider = 'claude' | 'cursor' | 'codex' | 'opencode';
 
 // ============================================================================
-// Claude API Profiles - Configuration for Claude-compatible API endpoints
+// Claude-Compatible Providers - Configuration for Claude-compatible API endpoints
 // ============================================================================
 
 /**
@@ -115,9 +115,89 @@ export type ModelProvider = 'claude' | 'cursor' | 'codex' | 'opencode';
 export type ApiKeySource = 'inline' | 'env' | 'credentials';
 
 /**
+ * ClaudeCompatibleProviderType - Type of Claude-compatible provider
+ *
+ * Used to determine provider-specific UI screens and default configurations.
+ */
+export type ClaudeCompatibleProviderType =
+  | 'anthropic' // Direct Anthropic API (built-in)
+  | 'glm' // z.AI GLM
+  | 'minimax' // MiniMax
+  | 'openrouter' // OpenRouter proxy
+  | 'custom'; // User-defined custom provider
+
+/**
+ * ClaudeModelAlias - The three main Claude model aliases for mapping
+ */
+export type ClaudeModelAlias = 'haiku' | 'sonnet' | 'opus';
+
+/**
+ * ProviderModel - A model exposed by a Claude-compatible provider
+ *
+ * Each provider configuration can expose multiple models that will appear
+ * in all model dropdowns throughout the app. Models map directly to a
+ * Claude model (haiku, sonnet, opus) for bulk replace and display.
+ */
+export interface ProviderModel {
+  /** Model ID sent to the API (e.g., "GLM-4.7", "MiniMax-M2.1") */
+  id: string;
+  /** Display name shown in UI (e.g., "GLM 4.7", "MiniMax M2.1") */
+  displayName: string;
+  /** Which Claude model this maps to (for bulk replace and display) */
+  mapsToClaudeModel?: ClaudeModelAlias;
+  /** Model capabilities */
+  capabilities?: {
+    /** Whether model supports vision/image inputs */
+    supportsVision?: boolean;
+    /** Whether model supports extended thinking */
+    supportsThinking?: boolean;
+    /** Maximum thinking level if thinking is supported */
+    maxThinkingLevel?: ThinkingLevel;
+  };
+}
+
+/**
+ * ClaudeCompatibleProvider - Configuration for a Claude-compatible API endpoint
+ *
+ * Providers expose their models to all model dropdowns in the app.
+ * Each provider has its own API configuration (endpoint, credentials, etc.)
+ */
+export interface ClaudeCompatibleProvider {
+  /** Unique identifier (uuid) */
+  id: string;
+  /** Display name (e.g., "z.AI GLM (Work)", "MiniMax") */
+  name: string;
+  /** Provider type determines UI screen and default settings */
+  providerType: ClaudeCompatibleProviderType;
+  /** Whether this provider is enabled (models appear in dropdowns) */
+  enabled?: boolean;
+
+  // Connection settings
+  /** ANTHROPIC_BASE_URL - custom API endpoint */
+  baseUrl: string;
+  /** API key sourcing strategy */
+  apiKeySource: ApiKeySource;
+  /** API key value (only required when apiKeySource = 'inline') */
+  apiKey?: string;
+  /** If true, use ANTHROPIC_AUTH_TOKEN instead of ANTHROPIC_API_KEY */
+  useAuthToken?: boolean;
+  /** API_TIMEOUT_MS override in milliseconds */
+  timeoutMs?: number;
+  /** Set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 */
+  disableNonessentialTraffic?: boolean;
+
+  /** Models exposed by this provider (appear in all dropdowns) */
+  models: ProviderModel[];
+
+  /** Provider-specific settings for future extensibility */
+  providerSettings?: Record<string, unknown>;
+}
+
+/**
  * ClaudeApiProfile - Configuration for a Claude-compatible API endpoint
  *
- * Allows using alternative providers like z.AI GLM, AWS Bedrock, etc.
+ * @deprecated Use ClaudeCompatibleProvider instead. This type is kept for
+ * backward compatibility during migration.
  */
 export interface ClaudeApiProfile {
   /** Unique identifier (uuid) */
@@ -139,7 +219,7 @@ export interface ClaudeApiProfile {
   useAuthToken?: boolean;
   /** API_TIMEOUT_MS override in milliseconds */
   timeoutMs?: number;
-  /** Optional model name mappings */
+  /** Optional model name mappings (deprecated - use ClaudeCompatibleProvider.models instead) */
   modelMappings?: {
     /** Maps to ANTHROPIC_DEFAULT_HAIKU_MODEL */
     haiku?: string;
@@ -152,11 +232,136 @@ export interface ClaudeApiProfile {
   disableNonessentialTraffic?: boolean;
 }
 
-/** Known provider templates for quick setup */
+/**
+ * ClaudeCompatibleProviderTemplate - Template for quick provider setup
+ *
+ * Contains pre-configured settings for known Claude-compatible providers.
+ */
+export interface ClaudeCompatibleProviderTemplate {
+  /** Template identifier for matching */
+  templateId: ClaudeCompatibleProviderType;
+  /** Display name for the template */
+  name: string;
+  /** Provider type */
+  providerType: ClaudeCompatibleProviderType;
+  /** API base URL */
+  baseUrl: string;
+  /** Default API key source for this template */
+  defaultApiKeySource: ApiKeySource;
+  /** Use auth token instead of API key */
+  useAuthToken: boolean;
+  /** Timeout in milliseconds */
+  timeoutMs?: number;
+  /** Disable non-essential traffic */
+  disableNonessentialTraffic?: boolean;
+  /** Description shown in UI */
+  description: string;
+  /** URL to get API key */
+  apiKeyUrl?: string;
+  /** Default models for this provider */
+  defaultModels: ProviderModel[];
+}
+
+/** Predefined templates for known Claude-compatible providers */
+export const CLAUDE_PROVIDER_TEMPLATES: ClaudeCompatibleProviderTemplate[] = [
+  {
+    templateId: 'anthropic',
+    name: 'Direct Anthropic',
+    providerType: 'anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    defaultApiKeySource: 'credentials',
+    useAuthToken: false,
+    description: 'Standard Anthropic API with your API key',
+    apiKeyUrl: 'https://console.anthropic.com/settings/keys',
+    defaultModels: [
+      { id: 'claude-haiku', displayName: 'Claude Haiku', mapsToClaudeModel: 'haiku' },
+      { id: 'claude-sonnet', displayName: 'Claude Sonnet', mapsToClaudeModel: 'sonnet' },
+      { id: 'claude-opus', displayName: 'Claude Opus', mapsToClaudeModel: 'opus' },
+    ],
+  },
+  {
+    templateId: 'openrouter',
+    name: 'OpenRouter',
+    providerType: 'openrouter',
+    baseUrl: 'https://openrouter.ai/api',
+    defaultApiKeySource: 'inline',
+    useAuthToken: true,
+    description: 'Access Claude and 300+ models via OpenRouter',
+    apiKeyUrl: 'https://openrouter.ai/keys',
+    defaultModels: [
+      // OpenRouter users manually add model IDs
+      {
+        id: 'anthropic/claude-3.5-haiku',
+        displayName: 'Claude 3.5 Haiku',
+        mapsToClaudeModel: 'haiku',
+      },
+      {
+        id: 'anthropic/claude-3.5-sonnet',
+        displayName: 'Claude 3.5 Sonnet',
+        mapsToClaudeModel: 'sonnet',
+      },
+      { id: 'anthropic/claude-3-opus', displayName: 'Claude 3 Opus', mapsToClaudeModel: 'opus' },
+    ],
+  },
+  {
+    templateId: 'glm',
+    name: 'z.AI GLM',
+    providerType: 'glm',
+    baseUrl: 'https://api.z.ai/api/anthropic',
+    defaultApiKeySource: 'inline',
+    useAuthToken: true,
+    timeoutMs: 3000000,
+    disableNonessentialTraffic: true,
+    description: '3× usage at fraction of cost via GLM Coding Plan',
+    apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list',
+    defaultModels: [
+      { id: 'GLM-4.5-Air', displayName: 'GLM 4.5 Air', mapsToClaudeModel: 'haiku' },
+      { id: 'GLM-4.7', displayName: 'GLM 4.7', mapsToClaudeModel: 'sonnet' },
+      { id: 'GLM-4.7', displayName: 'GLM 4.7', mapsToClaudeModel: 'opus' },
+    ],
+  },
+  {
+    templateId: 'minimax',
+    name: 'MiniMax',
+    providerType: 'minimax',
+    baseUrl: 'https://api.minimax.io/anthropic',
+    defaultApiKeySource: 'inline',
+    useAuthToken: true,
+    timeoutMs: 3000000,
+    disableNonessentialTraffic: true,
+    description: 'MiniMax M2.1 coding model with extended context',
+    apiKeyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key',
+    defaultModels: [
+      { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1', mapsToClaudeModel: 'haiku' },
+      { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1', mapsToClaudeModel: 'sonnet' },
+      { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1', mapsToClaudeModel: 'opus' },
+    ],
+  },
+  {
+    templateId: 'minimax',
+    name: 'MiniMax (China)',
+    providerType: 'minimax',
+    baseUrl: 'https://api.minimaxi.com/anthropic',
+    defaultApiKeySource: 'inline',
+    useAuthToken: true,
+    timeoutMs: 3000000,
+    disableNonessentialTraffic: true,
+    description: 'MiniMax M2.1 for users in China',
+    apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
+    defaultModels: [
+      { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1', mapsToClaudeModel: 'haiku' },
+      { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1', mapsToClaudeModel: 'sonnet' },
+      { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1', mapsToClaudeModel: 'opus' },
+    ],
+  },
+];
+
+/**
+ * @deprecated Use ClaudeCompatibleProviderTemplate instead
+ */
 export interface ClaudeApiProfileTemplate {
   name: string;
   baseUrl: string;
-  /** Default API key source for this template (user chooses when creating) */
   defaultApiKeySource?: ApiKeySource;
   useAuthToken: boolean;
   timeoutMs?: number;
@@ -166,7 +371,9 @@ export interface ClaudeApiProfileTemplate {
   apiKeyUrl?: string;
 }
 
-/** Predefined templates for known Claude-compatible providers */
+/**
+ * @deprecated Use CLAUDE_PROVIDER_TEMPLATES instead
+ */
 export const CLAUDE_API_PROFILE_TEMPLATES: ClaudeApiProfileTemplate[] = [
   {
     name: 'Direct Anthropic',
@@ -229,7 +436,6 @@ export const CLAUDE_API_PROFILE_TEMPLATES: ClaudeApiProfileTemplate[] = [
     description: 'MiniMax M2.1 for users in China',
     apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
   },
-  // Future: Add AWS Bedrock, Google Vertex, etc.
 ];
 
 // ============================================================================
@@ -340,8 +546,21 @@ const DEFAULT_CODEX_ADDITIONAL_DIRS: string[] = [];
  * - Claude models: Use thinkingLevel for extended thinking
  * - Codex models: Use reasoningEffort for reasoning intensity
  * - Cursor models: Handle thinking internally
+ *
+ * For Claude-compatible provider models (GLM, MiniMax, OpenRouter, etc.),
+ * the providerId field specifies which provider configuration to use.
  */
 export interface PhaseModelEntry {
+  /**
+   * Provider ID for Claude-compatible provider models.
+   * - undefined: Use native Anthropic API (no custom provider)
+   * - string: Use the specified ClaudeCompatibleProvider by ID
+   *
+   * Only required when using models from a ClaudeCompatibleProvider.
+   * Native Claude models (claude-haiku, claude-sonnet, claude-opus) and
+   * other providers (Cursor, Codex, OpenCode) don't need this field.
+   */
+  providerId?: string;
   /** The model to use (supports Claude, Cursor, Codex, OpenCode, and dynamic provider IDs) */
   model: ModelId;
   /** Extended thinking level (only applies to Claude models, defaults to 'none') */
@@ -790,16 +1009,24 @@ export interface GlobalSettings {
    */
   eventHooks?: EventHook[];
 
-  // Claude API Profiles Configuration
+  // Claude-Compatible Providers Configuration
   /**
-   * Claude-compatible API endpoint profiles
-   * Allows using alternative providers like z.AI GLM, AWS Bedrock, etc.
+   * Claude-compatible provider configurations.
+   * Each provider exposes its models to all model dropdowns in the app.
+   * Models can be mixed across providers (e.g., use GLM for enhancements, Anthropic for generation).
+   */
+  claudeCompatibleProviders?: ClaudeCompatibleProvider[];
+
+  // Deprecated Claude API Profiles (kept for migration)
+  /**
+   * @deprecated Use claudeCompatibleProviders instead.
+   * Kept for backward compatibility during migration.
    */
   claudeApiProfiles?: ClaudeApiProfile[];
 
   /**
-   * Active profile ID (null/undefined = use direct Anthropic API)
-   * When set, the corresponding profile's settings will be used for Claude API calls
+   * @deprecated No longer used. Models are selected per-phase via phaseModels.
+   * Each PhaseModelEntry can specify a providerId for provider-specific models.
    */
   activeClaudeApiProfileId?: string | null;
 }
@@ -939,12 +1166,19 @@ export interface ProjectSettings {
   /** Maximum concurrent agents for this project (overrides global maxConcurrency) */
   maxConcurrentAgents?: number;
 
-  // Claude API Profile Override (per-project)
+  // Phase Model Overrides (per-project)
   /**
-   * Override the active Claude API profile for this project.
-   * - undefined: Use global setting (activeClaudeApiProfileId)
-   * - null: Explicitly use Direct Anthropic API (no profile)
-   * - string: Use specific profile by ID
+   * Override phase model settings for this project.
+   * Any phase not specified here falls back to global phaseModels setting.
+   * Allows per-project customization of which models are used for each task.
+   */
+  phaseModelOverrides?: Partial<PhaseModelConfig>;
+
+  // Deprecated Claude API Profile Override
+  /**
+   * @deprecated Use phaseModelOverrides instead.
+   * Models are now selected per-phase via phaseModels/phaseModelOverrides.
+   * Each PhaseModelEntry can specify a providerId for provider-specific models.
    */
   activeClaudeApiProfileId?: string | null;
 }
@@ -980,7 +1214,7 @@ export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
 };
 
 /** Current version of the global settings schema */
-export const SETTINGS_VERSION = 5;
+export const SETTINGS_VERSION = 6;
 /** Current version of the credentials schema */
 export const CREDENTIALS_VERSION = 1;
 /** Current version of the project settings schema */
@@ -1069,6 +1303,9 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   skillsSources: ['user', 'project'],
   enableSubagents: true,
   subagentsSources: ['user', 'project'],
+  // New provider system
+  claudeCompatibleProviders: [],
+  // Deprecated - kept for migration
   claudeApiProfiles: [],
   activeClaudeApiProfileId: null,
 };

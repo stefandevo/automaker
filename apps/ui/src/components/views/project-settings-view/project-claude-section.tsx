@@ -63,7 +63,7 @@ export function ProjectClaudeSection({ project }: ProjectClaudeSectionProps) {
         <Bot className="w-12 h-12 mx-auto mb-3 opacity-50" />
         <p className="text-sm">Claude not configured</p>
         <p className="text-xs mt-1">
-          Enable Claude and configure API profiles in global settings to use per-project profiles.
+          Enable Claude and configure providers in global settings to use per-project overrides.
         </p>
       </div>
     );
@@ -95,12 +95,10 @@ export function ProjectClaudeSection({ project }: ProjectClaudeSectionProps) {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500/20 to-brand-600/10 flex items-center justify-center border border-brand-500/20">
             <Bot className="w-5 h-5 text-brand-500" />
           </div>
-          <h2 className="text-lg font-semibold text-foreground tracking-tight">
-            Claude API Profile
-          </h2>
+          <h2 className="text-lg font-semibold text-foreground tracking-tight">Claude Provider</h2>
         </div>
         <p className="text-sm text-muted-foreground/80 ml-12">
-          Override the Claude API profile for this project only.
+          Override the Claude provider for this project only.
         </p>
       </div>
 

@@ -31,6 +31,9 @@ import type {
   WorktreeInfo,
   PhaseModelConfig,
   PhaseModelEntry,
+  ClaudeApiProfile,
+  ClaudeCompatibleProvider,
+  ProviderModel,
 } from '../types/settings.js';
 import {
   DEFAULT_GLOBAL_SETTINGS,
@@ -206,6 +209,28 @@ export class SettingsService {
       needsSave = true;
     }
 
+    // Migration v5 -> v6: Convert claudeApiProfiles to claudeCompatibleProviders
+    // The new system uses a models[] array instead of modelMappings, and removes
+    // the "active profile" concept - models are selected directly in phase model configs.
+    if (storedVersion < 6) {
+      const legacyProfiles = settings.claudeApiProfiles || [];
+      if (
+        legacyProfiles.length > 0 &&
+        (!result.claudeCompatibleProviders || result.claudeCompatibleProviders.length === 0)
+      ) {
+        logger.info(
+          `Migration v5->v6: Converting ${legacyProfiles.length} Claude API profile(s) to compatible providers`
+        );
+        result.claudeCompatibleProviders = this.migrateProfilesToProviders(legacyProfiles);
+      }
+      // Remove the deprecated activeClaudeApiProfileId field
+      if (result.activeClaudeApiProfileId) {
+        logger.info('Migration v5->v6: Removing deprecated activeClaudeApiProfileId');
+        delete result.activeClaudeApiProfileId;
+      }
+      needsSave = true;
+    }
+
     // Update version if any migration occurred
     if (needsSave) {
       result.version = SETTINGS_VERSION;
@@ -288,6 +313,139 @@ export class SettingsService {
       ...value,
       model: migrateModelId(value.model) as PhaseModelEntry['model'],
     };
+  }
+
+  /**
+   * Migrate ClaudeApiProfiles to ClaudeCompatibleProviders
+   *
+   * Converts the legacy profile format (with modelMappings) to the new
+   * provider format (with models[] array). Each model mapping entry becomes
+   * a ProviderModel with appropriate tier assignment.
+   *
+   * @param profiles - Legacy ClaudeApiProfile array
+   * @returns Array of ClaudeCompatibleProvider
+   */
+  private migrateProfilesToProviders(profiles: ClaudeApiProfile[]): ClaudeCompatibleProvider[] {
+    return profiles.map((profile): ClaudeCompatibleProvider => {
+      // Convert modelMappings to models array
+      const models: ProviderModel[] = [];
+
+      if (profile.modelMappings) {
+        // Haiku mapping
+        if (profile.modelMappings.haiku) {
+          models.push({
+            id: profile.modelMappings.haiku,
+            displayName: this.inferModelDisplayName(profile.modelMappings.haiku, 'haiku'),
+            mapsToClaudeModel: 'haiku',
+          });
+        }
+        // Sonnet mapping
+        if (profile.modelMappings.sonnet) {
+          models.push({
+            id: profile.modelMappings.sonnet,
+            displayName: this.inferModelDisplayName(profile.modelMappings.sonnet, 'sonnet'),
+            mapsToClaudeModel: 'sonnet',
+          });
+        }
+        // Opus mapping
+        if (profile.modelMappings.opus) {
+          models.push({
+            id: profile.modelMappings.opus,
+            displayName: this.inferModelDisplayName(profile.modelMappings.opus, 'opus'),
+            mapsToClaudeModel: 'opus',
+          });
+        }
+      }
+
+      // Infer provider type from base URL or name
+      const providerType = this.inferProviderType(profile);
+
+      return {
+        id: profile.id,
+        name: profile.name,
+        providerType,
+        enabled: true,
+        baseUrl: profile.baseUrl,
+        apiKeySource: profile.apiKeySource ?? 'inline',
+        apiKey: profile.apiKey,
+        useAuthToken: profile.useAuthToken,
+        timeoutMs: profile.timeoutMs,
+        disableNonessentialTraffic: profile.disableNonessentialTraffic,
+        models,
+      };
+    });
+  }
+
+  /**
+   * Infer a display name for a model based on its ID and tier
+   *
+   * @param modelId - The raw model ID
+   * @param tier - The tier hint (haiku/sonnet/opus)
+   * @returns A user-friendly display name
+   */
+  private inferModelDisplayName(modelId: string, tier: 'haiku' | 'sonnet' | 'opus'): string {
+    // Common patterns in model IDs
+    const lowerModelId = modelId.toLowerCase();
+
+    // GLM models
+    if (lowerModelId.includes('glm')) {
+      return modelId.replace(/-/g, ' ').replace(/glm/i, 'GLM');
+    }
+
+    // MiniMax models
+    if (lowerModelId.includes('minimax')) {
+      return modelId.replace(/-/g, ' ').replace(/minimax/i, 'MiniMax');
+    }
+
+    // Claude models via OpenRouter or similar
+    if (lowerModelId.includes('claude')) {
+      return modelId;
+    }
+
+    // Default: use model ID as display name with tier in parentheses
+    return `${modelId} (${tier})`;
+  }
+
+  /**
+   * Infer provider type from profile configuration
+   *
+   * @param profile - The legacy profile
+   * @returns The inferred provider type
+   */
+  private inferProviderType(profile: ClaudeApiProfile): ClaudeCompatibleProvider['providerType'] {
+    const baseUrl = profile.baseUrl.toLowerCase();
+    const name = profile.name.toLowerCase();
+
+    // Check URL patterns
+    if (baseUrl.includes('z.ai') || baseUrl.includes('zhipuai')) {
+      return 'glm';
+    }
+    if (baseUrl.includes('minimax')) {
+      return 'minimax';
+    }
+    if (baseUrl.includes('openrouter')) {
+      return 'openrouter';
+    }
+    if (baseUrl.includes('anthropic.com')) {
+      return 'anthropic';
+    }
+
+    // Check name patterns
+    if (name.includes('glm') || name.includes('zhipu')) {
+      return 'glm';
+    }
+    if (name.includes('minimax')) {
+      return 'minimax';
+    }
+    if (name.includes('openrouter')) {
+      return 'openrouter';
+    }
+    if (name.includes('anthropic') || name.includes('direct')) {
+      return 'anthropic';
+    }
+
+    // Default to custom
+    return 'custom';
   }
 
   /**
@@ -413,6 +571,7 @@ export class SettingsService {
     ignoreEmptyArrayOverwrite('mcpServers');
     ignoreEmptyArrayOverwrite('enabledCursorModels');
     ignoreEmptyArrayOverwrite('claudeApiProfiles');
+    // Note: claudeCompatibleProviders intentionally NOT guarded - users should be able to delete all providers
 
     // Empty object overwrite guard
     if (
@@ -647,6 +806,16 @@ export class SettingsService {
       updates.activeClaudeApiProfileId === '__USE_GLOBAL__'
     ) {
       delete updated.activeClaudeApiProfileId;
+    }
+
+    // Handle phaseModelOverrides special cases:
+    // - "__CLEAR__" marker means delete the key (use global settings for all phases)
+    // - object means partial overrides for specific phases
+    if (
+      'phaseModelOverrides' in updates &&
+      (updates as Record<string, unknown>).phaseModelOverrides === '__CLEAR__'
+    ) {
+      delete updated.phaseModelOverrides;
     }
 
     await writeSettingsJson(settingsPath, updated);

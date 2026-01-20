@@ -12,10 +12,7 @@ import { resolveModelString } from '@automaker/model-resolver';
 import { CLAUDE_MODEL_MAP, type ThinkingLevel } from '@automaker/types';
 import { simpleQuery } from '../../../providers/simple-query-service.js';
 import type { SettingsService } from '../../../services/settings-service.js';
-import {
-  getPromptCustomization,
-  getActiveClaudeApiProfile,
-} from '../../../lib/settings-helpers.js';
+import { getPromptCustomization, getProviderByModelId } from '../../../lib/settings-helpers.js';
 import {
   buildUserPrompt,
   isValidEnhancementMode,
@@ -126,18 +123,34 @@ export function createEnhanceHandler(
       // Build the user prompt with few-shot examples
       const userPrompt = buildUserPrompt(validMode, trimmedText, true);
 
-      // Resolve the model - use the passed model, default to sonnet for quality
-      const resolvedModel = resolveModelString(model, CLAUDE_MODEL_MAP.sonnet);
+      // Check if the model is a provider model (like "GLM-4.5-Air")
+      // If so, get the provider config and resolved Claude model
+      let claudeCompatibleProvider: import('@automaker/types').ClaudeCompatibleProvider | undefined;
+      let providerResolvedModel: string | undefined;
+      let credentials = await settingsService?.getCredentials();
+
+      if (model && settingsService) {
+        const providerResult = await getProviderByModelId(
+          model,
+          settingsService,
+          '[EnhancePrompt]'
+        );
+        if (providerResult.provider) {
+          claudeCompatibleProvider = providerResult.provider;
+          providerResolvedModel = providerResult.resolvedModel;
+          credentials = providerResult.credentials;
+          logger.info(
+            `Using provider "${providerResult.provider.name}" for model "${model}"` +
+              (providerResolvedModel ? ` -> resolved to "${providerResolvedModel}"` : '')
+          );
+        }
+      }
+
+      // Resolve the model - use provider resolved model, passed model, or default to sonnet
+      const resolvedModel =
+        providerResolvedModel || resolveModelString(model, CLAUDE_MODEL_MAP.sonnet);
 
       logger.debug(`Using model: ${resolvedModel}`);
-
-      // Get active Claude API profile for alternative endpoint configuration
-      // Uses project-specific profile if projectPath provided, otherwise global
-      const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-        settingsService,
-        '[EnhancePrompt]',
-        projectPath
-      );
 
       // Use simpleQuery - provider abstraction handles routing to correct provider
       // The system prompt is combined with user prompt since some providers
@@ -150,8 +163,8 @@ export function createEnhanceHandler(
         allowedTools: [],
         thinkingLevel,
         readOnly: true, // Prompt enhancement only generates text, doesn't write files
-        claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
         credentials, // Pass credentials for resolving 'credentials' apiKeySource
+        claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
       });
 
       const enhancedText = result.text;

@@ -18,7 +18,7 @@ import type { SettingsService } from '../../services/settings-service.js';
 import {
   getAutoLoadClaudeMdSetting,
   getPromptCustomization,
-  getActiveClaudeApiProfile,
+  getPhaseModelWithOverrides,
 } from '../../lib/settings-helpers.js';
 
 const logger = createLogger('Suggestions');
@@ -171,11 +171,12 @@ ${prompts.suggestions.baseTemplate}`;
     '[Suggestions]'
   );
 
-  // Get model from phase settings (AI Suggestions = suggestionsModel)
+  // Get model from phase settings with provider info (AI Suggestions = suggestionsModel)
   // Use override if provided, otherwise fall back to settings
-  const settings = await settingsService?.getGlobalSettings();
   let model: string;
   let thinkingLevel: ThinkingLevel | undefined;
+  let provider: import('@automaker/types').ClaudeCompatibleProvider | undefined;
+  let credentials: import('@automaker/types').Credentials | undefined;
 
   if (modelOverride) {
     // Use explicit override - resolve the model string
@@ -185,22 +186,32 @@ ${prompts.suggestions.baseTemplate}`;
     });
     model = resolved.model;
     thinkingLevel = resolved.thinkingLevel;
+    // For overrides, just get credentials without a specific provider
+    credentials = await settingsService?.getCredentials();
+  } else if (settingsService) {
+    // Use settings-based model with provider info
+    const phaseResult = await getPhaseModelWithOverrides(
+      'suggestionsModel',
+      settingsService,
+      projectPath,
+      '[Suggestions]'
+    );
+    const resolved = resolvePhaseModel(phaseResult.phaseModel);
+    model = resolved.model;
+    thinkingLevel = resolved.thinkingLevel;
+    provider = phaseResult.provider;
+    credentials = phaseResult.credentials;
   } else {
-    // Use settings-based model
-    const phaseModelEntry =
-      settings?.phaseModels?.suggestionsModel || DEFAULT_PHASE_MODELS.suggestionsModel;
-    const resolved = resolvePhaseModel(phaseModelEntry);
+    // Fallback to defaults
+    const resolved = resolvePhaseModel(DEFAULT_PHASE_MODELS.suggestionsModel);
     model = resolved.model;
     thinkingLevel = resolved.thinkingLevel;
   }
 
-  logger.info('[Suggestions] Using model:', model);
-
-  // Get active Claude API profile for alternative endpoint configuration
-  const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-    settingsService,
-    '[Suggestions]',
-    projectPath
+  logger.info(
+    '[Suggestions] Using model:',
+    model,
+    provider ? `via provider: ${provider.name}` : 'direct API'
   );
 
   let responseText = '';
@@ -234,7 +245,7 @@ Your entire response should be valid JSON starting with { and ending with }. No 
     thinkingLevel,
     readOnly: true, // Suggestions only reads code, doesn't write
     settingSources: autoLoadClaudeMd ? ['user', 'project', 'local'] : undefined,
-    claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+    claudeCompatibleProvider: provider, // Pass provider for alternative endpoint configuration
     credentials, // Pass credentials for resolving 'credentials' apiKeySource
     outputFormat: useStructuredOutput
       ? {

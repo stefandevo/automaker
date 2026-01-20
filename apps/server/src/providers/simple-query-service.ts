@@ -21,6 +21,7 @@ import type {
   ThinkingLevel,
   ReasoningEffort,
   ClaudeApiProfile,
+  ClaudeCompatibleProvider,
   Credentials,
 } from '@automaker/types';
 import { stripProviderPrefix } from '@automaker/types';
@@ -56,9 +57,17 @@ export interface SimpleQueryOptions {
   readOnly?: boolean;
   /** Setting sources for CLAUDE.md loading */
   settingSources?: Array<'user' | 'project' | 'local'>;
-  /** Active Claude API profile for alternative endpoint configuration */
+  /**
+   * Active Claude API profile for alternative endpoint configuration
+   * @deprecated Use claudeCompatibleProvider instead
+   */
   claudeApiProfile?: ClaudeApiProfile;
-  /** Credentials for resolving 'credentials' apiKeySource in Claude API profiles */
+  /**
+   * Claude-compatible provider for alternative endpoint configuration.
+   * Takes precedence over claudeApiProfile if both are set.
+   */
+  claudeCompatibleProvider?: ClaudeCompatibleProvider;
+  /** Credentials for resolving 'credentials' apiKeySource in Claude API profiles/providers */
   credentials?: Credentials;
 }
 
@@ -131,7 +140,8 @@ export async function simpleQuery(options: SimpleQueryOptions): Promise<SimpleQu
     reasoningEffort: options.reasoningEffort,
     readOnly: options.readOnly,
     settingSources: options.settingSources,
-    claudeApiProfile: options.claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+    claudeApiProfile: options.claudeApiProfile, // Legacy: Pass active Claude API profile for alternative endpoint configuration
+    claudeCompatibleProvider: options.claudeCompatibleProvider, // New: Pass Claude-compatible provider (takes precedence)
     credentials: options.credentials, // Pass credentials for resolving 'credentials' apiKeySource
   };
 
@@ -215,7 +225,8 @@ export async function streamingQuery(options: StreamingQueryOptions): Promise<Si
     reasoningEffort: options.reasoningEffort,
     readOnly: options.readOnly,
     settingSources: options.settingSources,
-    claudeApiProfile: options.claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+    claudeApiProfile: options.claudeApiProfile, // Legacy: Pass active Claude API profile for alternative endpoint configuration
+    claudeCompatibleProvider: options.claudeCompatibleProvider, // New: Pass Claude-compatible provider (takes precedence)
     credentials: options.credentials, // Pass credentials for resolving 'credentials' apiKeySource
   };
 

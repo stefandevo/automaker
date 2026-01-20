@@ -113,11 +113,12 @@ export function resolveModelString(
     return canonicalKey;
   }
 
-  // Unknown model key - use default
-  console.warn(
-    `[ModelResolver] Unknown model key "${canonicalKey}", using default: "${defaultModel}"`
+  // Unknown model key - pass through as-is (could be a provider model like GLM-4.7, MiniMax-M2.1)
+  // This allows ClaudeCompatibleProvider models to work without being registered here
+  console.log(
+    `[ModelResolver] Unknown model key "${canonicalKey}", passing through unchanged (may be a provider model)`
   );
-  return defaultModel;
+  return canonicalKey;
 }
 
 /**
@@ -145,6 +146,8 @@ export interface ResolvedPhaseModel {
   model: string;
   /** Optional thinking level for extended thinking */
   thinkingLevel?: ThinkingLevel;
+  /** Provider ID if using a ClaudeCompatibleProvider */
+  providerId?: string;
 }
 
 /**
@@ -198,8 +201,23 @@ export function resolvePhaseModel(
 
   // Handle new PhaseModelEntry object format
   console.log(
-    `[ModelResolver] phaseModel is object format: model="${phaseModel.model}", thinkingLevel="${phaseModel.thinkingLevel}"`
+    `[ModelResolver] phaseModel is object format: model="${phaseModel.model}", thinkingLevel="${phaseModel.thinkingLevel}", providerId="${phaseModel.providerId}"`
   );
+
+  // If providerId is set, pass through the model string unchanged
+  // (it's a provider-specific model ID like "GLM-4.5-Air", not a Claude alias)
+  if (phaseModel.providerId) {
+    console.log(
+      `[ModelResolver] Using provider model: providerId="${phaseModel.providerId}", model="${phaseModel.model}"`
+    );
+    return {
+      model: phaseModel.model, // Pass through unchanged
+      thinkingLevel: phaseModel.thinkingLevel,
+      providerId: phaseModel.providerId,
+    };
+  }
+
+  // No providerId - resolve through normal Claude model mapping
   return {
     model: resolveModelString(phaseModel.model, defaultModel),
     thinkingLevel: phaseModel.thinkingLevel,

@@ -14,8 +14,17 @@ import {
   getThinkingTokenBudget,
   validateBareModelId,
   type ClaudeApiProfile,
+  type ClaudeCompatibleProvider,
   type Credentials,
 } from '@automaker/types';
+
+/**
+ * ProviderConfig - Union type for provider configuration
+ *
+ * Accepts either the legacy ClaudeApiProfile or new ClaudeCompatibleProvider.
+ * Both share the same connection settings structure.
+ */
+type ProviderConfig = ClaudeApiProfile | ClaudeCompatibleProvider;
 import type {
   ExecuteOptions,
   ProviderMessage,
@@ -52,33 +61,47 @@ const ALLOWED_ENV_VARS = [
 const SYSTEM_ENV_VARS = ['PATH', 'HOME', 'SHELL', 'TERM', 'USER', 'LANG', 'LC_ALL'];
 
 /**
+ * Check if the config is a ClaudeCompatibleProvider (new system)
+ * by checking for the 'models' array property
+ */
+function isClaudeCompatibleProvider(config: ProviderConfig): config is ClaudeCompatibleProvider {
+  return 'models' in config && Array.isArray(config.models);
+}
+
+/**
  * Build environment for the SDK with only explicitly allowed variables.
- * When a profile is provided, uses profile configuration (clean switch - don't inherit from process.env).
- * When no profile is provided, uses direct Anthropic API settings from process.env.
+ * When a provider/profile is provided, uses its configuration (clean switch - don't inherit from process.env).
+ * When no provider is provided, uses direct Anthropic API settings from process.env.
  *
- * @param profile - Optional Claude API profile for alternative endpoint configuration
+ * Supports both:
+ * - ClaudeCompatibleProvider (new system with models[] array)
+ * - ClaudeApiProfile (legacy system with modelMappings)
+ *
+ * @param providerConfig - Optional provider configuration for alternative endpoint
  * @param credentials - Optional credentials object for resolving 'credentials' apiKeySource
  */
 function buildEnv(
-  profile?: ClaudeApiProfile,
+  providerConfig?: ProviderConfig,
   credentials?: Credentials
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
 
-  if (profile) {
-    // Use profile configuration (clean switch - don't inherit non-system vars from process.env)
-    logger.debug('Building environment from Claude API profile:', {
-      name: profile.name,
-      apiKeySource: profile.apiKeySource ?? 'inline',
+  if (providerConfig) {
+    // Use provider configuration (clean switch - don't inherit non-system vars from process.env)
+    logger.debug('[buildEnv] Using provider configuration:', {
+      name: providerConfig.name,
+      baseUrl: providerConfig.baseUrl,
+      apiKeySource: providerConfig.apiKeySource ?? 'inline',
+      isNewProvider: isClaudeCompatibleProvider(providerConfig),
     });
 
     // Resolve API key based on source strategy
     let apiKey: string | undefined;
-    const source = profile.apiKeySource ?? 'inline'; // Default to inline for backwards compat
+    const source = providerConfig.apiKeySource ?? 'inline'; // Default to inline for backwards compat
 
     switch (source) {
       case 'inline':
-        apiKey = profile.apiKey;
+        apiKey = providerConfig.apiKey;
         break;
       case 'env':
         apiKey = process.env.ANTHROPIC_API_KEY;
@@ -90,36 +113,40 @@ function buildEnv(
 
     // Warn if no API key found
     if (!apiKey) {
-      logger.warn(`No API key found for profile "${profile.name}" with source "${source}"`);
+      logger.warn(`No API key found for provider "${providerConfig.name}" with source "${source}"`);
     }
 
     // Authentication
-    if (profile.useAuthToken) {
+    if (providerConfig.useAuthToken) {
       env['ANTHROPIC_AUTH_TOKEN'] = apiKey;
     } else {
       env['ANTHROPIC_API_KEY'] = apiKey;
     }
 
     // Endpoint configuration
-    env['ANTHROPIC_BASE_URL'] = profile.baseUrl;
+    env['ANTHROPIC_BASE_URL'] = providerConfig.baseUrl;
+    logger.debug(`[buildEnv] Set ANTHROPIC_BASE_URL to: ${providerConfig.baseUrl}`);
 
-    if (profile.timeoutMs) {
-      env['API_TIMEOUT_MS'] = String(profile.timeoutMs);
+    if (providerConfig.timeoutMs) {
+      env['API_TIMEOUT_MS'] = String(providerConfig.timeoutMs);
     }
 
-    // Model mappings
-    if (profile.modelMappings?.haiku) {
-      env['ANTHROPIC_DEFAULT_HAIKU_MODEL'] = profile.modelMappings.haiku;
-    }
-    if (profile.modelMappings?.sonnet) {
-      env['ANTHROPIC_DEFAULT_SONNET_MODEL'] = profile.modelMappings.sonnet;
-    }
-    if (profile.modelMappings?.opus) {
-      env['ANTHROPIC_DEFAULT_OPUS_MODEL'] = profile.modelMappings.opus;
+    // Model mappings - only for legacy ClaudeApiProfile
+    // For ClaudeCompatibleProvider, the model is passed directly (no mapping needed)
+    if (!isClaudeCompatibleProvider(providerConfig) && providerConfig.modelMappings) {
+      if (providerConfig.modelMappings.haiku) {
+        env['ANTHROPIC_DEFAULT_HAIKU_MODEL'] = providerConfig.modelMappings.haiku;
+      }
+      if (providerConfig.modelMappings.sonnet) {
+        env['ANTHROPIC_DEFAULT_SONNET_MODEL'] = providerConfig.modelMappings.sonnet;
+      }
+      if (providerConfig.modelMappings.opus) {
+        env['ANTHROPIC_DEFAULT_OPUS_MODEL'] = providerConfig.modelMappings.opus;
+      }
     }
 
     // Traffic control
-    if (profile.disableNonessentialTraffic) {
+    if (providerConfig.disableNonessentialTraffic) {
       env['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'] = '1';
     }
   } else {
@@ -184,8 +211,13 @@ export class ClaudeProvider extends BaseProvider {
       sdkSessionId,
       thinkingLevel,
       claudeApiProfile,
+      claudeCompatibleProvider,
       credentials,
     } = options;
+
+    // Determine which provider config to use
+    // claudeCompatibleProvider takes precedence over claudeApiProfile
+    const providerConfig = claudeCompatibleProvider || claudeApiProfile;
 
     // Convert thinking level to token budget
     const maxThinkingTokens = getThinkingTokenBudget(thinkingLevel);
@@ -197,9 +229,9 @@ export class ClaudeProvider extends BaseProvider {
       maxTurns,
       cwd,
       // Pass only explicitly allowed environment variables to SDK
-      // When a profile is active, uses profile settings (clean switch)
-      // When no profile, uses direct Anthropic API (from process.env or CLI OAuth)
-      env: buildEnv(claudeApiProfile, credentials),
+      // When a provider is active, uses provider settings (clean switch)
+      // When no provider, uses direct Anthropic API (from process.env or CLI OAuth)
+      env: buildEnv(providerConfig, credentials),
       // Pass through allowedTools if provided by caller (decided by sdk-options.ts)
       ...(allowedTools && { allowedTools }),
       // AUTONOMOUS MODE: Always bypass permissions for fully autonomous operation
@@ -243,6 +275,18 @@ export class ClaudeProvider extends BaseProvider {
       // Simple text prompt
       promptPayload = prompt;
     }
+
+    // Log the environment being passed to the SDK for debugging
+    const envForSdk = sdkOptions.env as Record<string, string | undefined>;
+    logger.debug('[ClaudeProvider] SDK Configuration:', {
+      model: sdkOptions.model,
+      baseUrl: envForSdk?.['ANTHROPIC_BASE_URL'] || '(default Anthropic API)',
+      hasApiKey: !!envForSdk?.['ANTHROPIC_API_KEY'],
+      hasAuthToken: !!envForSdk?.['ANTHROPIC_AUTH_TOKEN'],
+      providerName: providerConfig?.name || '(direct Anthropic)',
+      maxTurns: sdkOptions.maxTurns,
+      maxThinkingTokens: sdkOptions.maxThinkingTokens,
+    });
 
     // Execute via Claude Agent SDK
     try {

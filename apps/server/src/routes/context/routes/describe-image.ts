@@ -22,7 +22,7 @@ import type { SettingsService } from '../../../services/settings-service.js';
 import {
   getAutoLoadClaudeMdSetting,
   getPromptCustomization,
-  getActiveClaudeApiProfile,
+  getPhaseModelWithOverrides,
 } from '../../../lib/settings-helpers.js';
 
 const logger = createLogger('DescribeImage');
@@ -274,23 +274,32 @@ export function createDescribeImageHandler(
         '[DescribeImage]'
       );
 
-      // Get model from phase settings
-      const settings = await settingsService?.getGlobalSettings();
-      const phaseModelEntry =
-        settings?.phaseModels?.imageDescriptionModel || DEFAULT_PHASE_MODELS.imageDescriptionModel;
+      // Get model from phase settings with provider info
+      const {
+        phaseModel: phaseModelEntry,
+        provider,
+        credentials,
+      } = settingsService
+        ? await getPhaseModelWithOverrides(
+            'imageDescriptionModel',
+            settingsService,
+            cwd,
+            '[DescribeImage]'
+          )
+        : {
+            phaseModel: DEFAULT_PHASE_MODELS.imageDescriptionModel,
+            provider: undefined,
+            credentials: undefined,
+          };
       const { model, thinkingLevel } = resolvePhaseModel(phaseModelEntry);
 
-      logger.info(`[${requestId}] Using model: ${model}`);
+      logger.info(
+        `[${requestId}] Using model: ${model}`,
+        provider ? `via provider: ${provider.name}` : 'direct API'
+      );
 
       // Get customized prompts from settings
       const prompts = await getPromptCustomization(settingsService, '[DescribeImage]');
-
-      // Get active Claude API profile for alternative endpoint configuration
-      const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-        settingsService,
-        '[DescribeImage]',
-        cwd
-      );
 
       // Build the instruction text from centralized prompts
       const instructionText = prompts.contextDescription.describeImagePrompt;
@@ -333,7 +342,7 @@ export function createDescribeImageHandler(
         thinkingLevel,
         readOnly: true, // Image description only reads, doesn't write
         settingSources: autoLoadClaudeMd ? ['user', 'project', 'local'] : undefined,
-        claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+        claudeCompatibleProvider: provider, // Pass provider for alternative endpoint configuration
         credentials, // Pass credentials for resolving 'credentials' apiKeySource
       });
 

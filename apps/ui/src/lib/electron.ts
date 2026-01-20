@@ -3378,8 +3378,15 @@ export interface Project {
    * - undefined: Use global setting (activeClaudeApiProfileId)
    * - null: Explicitly use Direct Anthropic API (no profile)
    * - string: Use specific profile by ID
+   * @deprecated Use phaseModelOverrides instead for per-phase model selection
    */
   activeClaudeApiProfileId?: string | null;
+  /**
+   * Per-phase model overrides for this project.
+   * Keys are phase names (e.g., 'enhancementModel'), values are PhaseModelEntry.
+   * If a phase is not present, the global setting is used.
+   */
+  phaseModelOverrides?: Partial<import('@automaker/types').PhaseModelConfig>;
 }
 
 export interface TrashedProject extends Project {

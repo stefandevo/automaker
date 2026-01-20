@@ -109,25 +109,45 @@ export function useProjectSettingsLoader() {
             );
           }
 
-          // Apply activeClaudeApiProfileId if present
-          // This is stored directly on the project, so we need to update the currentProject
+          // Apply activeClaudeApiProfileId and phaseModelOverrides if present
+          // These are stored directly on the project, so we need to update both
+          // currentProject AND the projects array to keep them in sync
           // Type assertion needed because API returns Record<string, unknown>
           const settingsWithProfile = result.settings as Record<string, unknown>;
           const activeClaudeApiProfileId = settingsWithProfile.activeClaudeApiProfileId as
             | string
             | null
             | undefined;
-          if (activeClaudeApiProfileId !== undefined) {
-            const updatedProject = useAppStore.getState().currentProject;
-            if (
-              updatedProject &&
-              updatedProject.path === requestedProjectPath &&
-              updatedProject.activeClaudeApiProfileId !== activeClaudeApiProfileId
-            ) {
-              setCurrentProject({
+          const phaseModelOverrides = settingsWithProfile.phaseModelOverrides as
+            | import('@automaker/types').PhaseModelConfig
+            | undefined;
+
+          // Check if we need to update the project
+          const storeState = useAppStore.getState();
+          const updatedProject = storeState.currentProject;
+          if (updatedProject && updatedProject.path === requestedProjectPath) {
+            const needsUpdate =
+              (activeClaudeApiProfileId !== undefined &&
+                updatedProject.activeClaudeApiProfileId !== activeClaudeApiProfileId) ||
+              (phaseModelOverrides !== undefined &&
+                JSON.stringify(updatedProject.phaseModelOverrides) !==
+                  JSON.stringify(phaseModelOverrides));
+
+            if (needsUpdate) {
+              const updatedProjectData = {
                 ...updatedProject,
-                activeClaudeApiProfileId,
-              });
+                ...(activeClaudeApiProfileId !== undefined && { activeClaudeApiProfileId }),
+                ...(phaseModelOverrides !== undefined && { phaseModelOverrides }),
+              };
+
+              // Update currentProject
+              setCurrentProject(updatedProjectData);
+
+              // Also update the project in the projects array to keep them in sync
+              const updatedProjects = storeState.projects.map((p) =>
+                p.id === updatedProject.id ? updatedProjectData : p
+              );
+              useAppStore.setState({ projects: updatedProjects });
             }
           }
         }

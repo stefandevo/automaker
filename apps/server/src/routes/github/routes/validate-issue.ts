@@ -37,7 +37,7 @@ import {
 import {
   getPromptCustomization,
   getAutoLoadClaudeMdSetting,
-  getActiveClaudeApiProfile,
+  getProviderByModelId,
 } from '../../../lib/settings-helpers.js';
 import {
   trySetValidationRunning,
@@ -167,19 +167,33 @@ ${basePrompt}`;
       }
     }
 
-    logger.info(`Using model: ${model}`);
+    // Check if the model is a provider model (like "GLM-4.5-Air")
+    // If so, get the provider config and resolved Claude model
+    let claudeCompatibleProvider: import('@automaker/types').ClaudeCompatibleProvider | undefined;
+    let providerResolvedModel: string | undefined;
+    let credentials = await settingsService?.getCredentials();
 
-    // Get active Claude API profile for alternative endpoint configuration
-    const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-      settingsService,
-      '[IssueValidation]',
-      projectPath
-    );
+    if (settingsService) {
+      const providerResult = await getProviderByModelId(model, settingsService, '[ValidateIssue]');
+      if (providerResult.provider) {
+        claudeCompatibleProvider = providerResult.provider;
+        providerResolvedModel = providerResult.resolvedModel;
+        credentials = providerResult.credentials;
+        logger.info(
+          `Using provider "${providerResult.provider.name}" for model "${model}"` +
+            (providerResolvedModel ? ` -> resolved to "${providerResolvedModel}"` : '')
+        );
+      }
+    }
+
+    // Use provider resolved model if available, otherwise use original model
+    const effectiveModel = providerResolvedModel || (model as string);
+    logger.info(`Using model: ${effectiveModel}`);
 
     // Use streamingQuery with event callbacks
     const result = await streamingQuery({
       prompt: finalPrompt,
-      model: model as string,
+      model: effectiveModel,
       cwd: projectPath,
       systemPrompt: useStructuredOutput ? issueValidationSystemPrompt : undefined,
       abortController,
@@ -187,7 +201,7 @@ ${basePrompt}`;
       reasoningEffort: effectiveReasoningEffort,
       readOnly: true, // Issue validation only reads code, doesn't write
       settingSources: autoLoadClaudeMd ? ['user', 'project', 'local'] : undefined,
-      claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+      claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
       credentials, // Pass credentials for resolving 'credentials' apiKeySource
       outputFormat: useStructuredOutput
         ? {

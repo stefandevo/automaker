@@ -47,7 +47,7 @@ export function ClaudeSettingsTab() {
         onRefresh={handleRefreshClaudeCli}
       />
 
-      {/* API Profiles for Claude-compatible endpoints */}
+      {/* Claude-compatible providers */}
       <ApiProfilesSection />
 
       <ClaudeMdSettings

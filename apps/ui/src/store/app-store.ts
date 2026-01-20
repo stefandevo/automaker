@@ -33,6 +33,7 @@ import type {
   ServerLogLevel,
   EventHook,
   ClaudeApiProfile,
+  ClaudeCompatibleProvider,
 } from '@automaker/types';
 import {
   getAllCursorModelIds,
@@ -752,7 +753,10 @@ export interface AppState {
   // Event Hooks
   eventHooks: EventHook[]; // Event hooks for custom commands or webhooks
 
-  // Claude API Profiles
+  // Claude-Compatible Providers (new system)
+  claudeCompatibleProviders: ClaudeCompatibleProvider[]; // Providers that expose models to dropdowns
+
+  // Claude API Profiles (deprecated - kept for backward compatibility)
   claudeApiProfiles: ClaudeApiProfile[]; // Claude-compatible API endpoint profiles
   activeClaudeApiProfileId: string | null; // Active profile ID (null = use direct Anthropic API)
 
@@ -1040,7 +1044,16 @@ export interface AppActions {
   getEffectiveFontMono: () => string | null; // Get effective code font (project override -> global -> null for default)
 
   // Claude API Profile actions (per-project override)
+  /** @deprecated Use setProjectPhaseModelOverride instead */
   setProjectClaudeApiProfile: (projectId: string, profileId: string | null | undefined) => void; // Set per-project Claude API profile (undefined = use global, null = direct API, string = specific profile)
+
+  // Project Phase Model Overrides
+  setProjectPhaseModelOverride: (
+    projectId: string,
+    phase: import('@automaker/types').PhaseModelKey,
+    entry: import('@automaker/types').PhaseModelEntry | null // null = use global
+  ) => void;
+  clearAllProjectPhaseModelOverrides: (projectId: string) => void;
 
   // Feature actions
   setFeatures: (features: Feature[]) => void;
@@ -1210,7 +1223,17 @@ export interface AppActions {
   // Event Hook actions
   setEventHooks: (hooks: EventHook[]) => void;
 
-  // Claude API Profile actions
+  // Claude-Compatible Provider actions (new system)
+  addClaudeCompatibleProvider: (provider: ClaudeCompatibleProvider) => Promise<void>;
+  updateClaudeCompatibleProvider: (
+    id: string,
+    updates: Partial<ClaudeCompatibleProvider>
+  ) => Promise<void>;
+  deleteClaudeCompatibleProvider: (id: string) => Promise<void>;
+  setClaudeCompatibleProviders: (providers: ClaudeCompatibleProvider[]) => Promise<void>;
+  toggleClaudeCompatibleProviderEnabled: (id: string) => Promise<void>;
+
+  // Claude API Profile actions (deprecated - kept for backward compatibility)
   addClaudeApiProfile: (profile: ClaudeApiProfile) => Promise<void>;
   updateClaudeApiProfile: (id: string, updates: Partial<ClaudeApiProfile>) => Promise<void>;
   deleteClaudeApiProfile: (id: string) => Promise<void>;
@@ -1475,8 +1498,9 @@ const initialState: AppState = {
   subagentsSources: ['user', 'project'] as Array<'user' | 'project'>, // Load from both sources by default
   promptCustomization: {}, // Empty by default - all prompts use built-in defaults
   eventHooks: [], // No event hooks configured by default
-  claudeApiProfiles: [], // No Claude API profiles configured by default
-  activeClaudeApiProfileId: null, // Use direct Anthropic API by default
+  claudeCompatibleProviders: [], // Claude-compatible providers that expose models
+  claudeApiProfiles: [], // No Claude API profiles configured by default (deprecated)
+  activeClaudeApiProfileId: null, // Use direct Anthropic API by default (deprecated)
   projectAnalysis: null,
   isAnalyzing: false,
   boardBackgroundByProject: {},
@@ -2013,6 +2037,98 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       })
       .catch((error) => {
         console.error('Failed to persist activeClaudeApiProfileId:', error);
+      });
+  },
+
+  // Project Phase Model Override actions
+  setProjectPhaseModelOverride: (projectId, phase, entry) => {
+    // Find the project to get its path for server sync
+    const project = get().projects.find((p) => p.id === projectId);
+    if (!project) {
+      console.error('Cannot set phase model override: project not found');
+      return;
+    }
+
+    // Get current overrides or start fresh
+    const currentOverrides = project.phaseModelOverrides || {};
+
+    // Build new overrides
+    let newOverrides: typeof currentOverrides;
+    if (entry === null) {
+      // Remove the override (use global)
+      const { [phase]: _, ...rest } = currentOverrides;
+      newOverrides = rest;
+    } else {
+      // Set the override
+      newOverrides = { ...currentOverrides, [phase]: entry };
+    }
+
+    // Update the project's phaseModelOverrides
+    const projects = get().projects.map((p) =>
+      p.id === projectId
+        ? {
+            ...p,
+            phaseModelOverrides: Object.keys(newOverrides).length > 0 ? newOverrides : undefined,
+          }
+        : p
+    );
+    set({ projects });
+
+    // Also update currentProject if it's the same project
+    const currentProject = get().currentProject;
+    if (currentProject?.id === projectId) {
+      set({
+        currentProject: {
+          ...currentProject,
+          phaseModelOverrides: Object.keys(newOverrides).length > 0 ? newOverrides : undefined,
+        },
+      });
+    }
+
+    // Persist to server
+    const httpClient = getHttpApiClient();
+    httpClient.settings
+      .updateProject(project.path, {
+        phaseModelOverrides: Object.keys(newOverrides).length > 0 ? newOverrides : '__CLEAR__',
+      })
+      .catch((error) => {
+        console.error('Failed to persist phaseModelOverrides:', error);
+      });
+  },
+
+  clearAllProjectPhaseModelOverrides: (projectId) => {
+    // Find the project to get its path for server sync
+    const project = get().projects.find((p) => p.id === projectId);
+    if (!project) {
+      console.error('Cannot clear phase model overrides: project not found');
+      return;
+    }
+
+    // Clear overrides from project
+    const projects = get().projects.map((p) =>
+      p.id === projectId ? { ...p, phaseModelOverrides: undefined } : p
+    );
+    set({ projects });
+
+    // Also update currentProject if it's the same project
+    const currentProject = get().currentProject;
+    if (currentProject?.id === projectId) {
+      set({
+        currentProject: {
+          ...currentProject,
+          phaseModelOverrides: undefined,
+        },
+      });
+    }
+
+    // Persist to server
+    const httpClient = getHttpApiClient();
+    httpClient.settings
+      .updateProject(project.path, {
+        phaseModelOverrides: '__CLEAR__',
+      })
+      .catch((error) => {
+        console.error('Failed to clear phaseModelOverrides:', error);
       });
   },
 
@@ -2590,7 +2706,53 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   // Event Hook actions
   setEventHooks: (hooks) => set({ eventHooks: hooks }),
 
-  // Claude API Profile actions
+  // Claude-Compatible Provider actions (new system)
+  addClaudeCompatibleProvider: async (provider) => {
+    set({ claudeCompatibleProviders: [...get().claudeCompatibleProviders, provider] });
+    // Sync immediately to persist provider
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    await syncSettingsToServer();
+  },
+
+  updateClaudeCompatibleProvider: async (id, updates) => {
+    set({
+      claudeCompatibleProviders: get().claudeCompatibleProviders.map((p) =>
+        p.id === id ? { ...p, ...updates } : p
+      ),
+    });
+    // Sync immediately to persist changes
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    await syncSettingsToServer();
+  },
+
+  deleteClaudeCompatibleProvider: async (id) => {
+    set({
+      claudeCompatibleProviders: get().claudeCompatibleProviders.filter((p) => p.id !== id),
+    });
+    // Sync immediately to persist deletion
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    await syncSettingsToServer();
+  },
+
+  setClaudeCompatibleProviders: async (providers) => {
+    set({ claudeCompatibleProviders: providers });
+    // Sync immediately to persist providers
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    await syncSettingsToServer();
+  },
+
+  toggleClaudeCompatibleProviderEnabled: async (id) => {
+    set({
+      claudeCompatibleProviders: get().claudeCompatibleProviders.map((p) =>
+        p.id === id ? { ...p, enabled: p.enabled === false ? true : false } : p
+      ),
+    });
+    // Sync immediately to persist change
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    await syncSettingsToServer();
+  },
+
+  // Claude API Profile actions (deprecated - kept for backward compatibility)
   addClaudeApiProfile: async (profile) => {
     set({ claudeApiProfiles: [...get().claudeApiProfiles, profile] });
     // Sync immediately to persist profile

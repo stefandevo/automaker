@@ -1,204 +1,114 @@
-# Unified Claude API Key and Profile System
+# Claude Compatible Providers System
 
-This document describes the implementation of a unified API key sourcing system for Claude API profiles, allowing flexible configuration of how API keys are resolved.
+This document describes the implementation of Claude Compatible Providers, allowing users to configure alternative API endpoints that expose Claude-compatible models to the application.
 
-## Problem Statement
+## Overview
 
-Previously, Automaker had two separate systems for configuring Claude API access:
+Claude Compatible Providers allow Automaker to work with third-party API endpoints that implement Claude's API protocol. This enables:
 
-1. **API Keys section** (`credentials.json`): Stored Anthropic API key, used when no profile was active
-2. **API Profiles section** (`settings.json`): Stored alternative endpoint configs (e.g., z.AI GLM) with their own inline API keys
+- **Cost savings**: Use providers like z.AI GLM or MiniMax at lower costs
+- **Alternative models**: Access models like GLM-4.7 or MiniMax M2.1 through familiar interfaces
+- **Flexibility**: Configure per-phase model selection to optimize for speed vs quality
+- **Project overrides**: Use different providers for different projects
 
-This created several issues:
+## Architecture
 
-- Users configured Anthropic key in one place, but alternative endpoints in another
-- No way to create a "Direct Anthropic" profile that reused the stored credentials
-- Environment variable detection didn't integrate with the profile system
-- Duplicated API key entry when users wanted the same key for multiple configurations
+### Type Definitions
 
-## Solution Overview
-
-The solution introduces a flexible `apiKeySource` field on Claude API profiles that determines where the API key is resolved from:
-
-| Source        | Description                                                       |
-| ------------- | ----------------------------------------------------------------- |
-| `inline`      | API key stored directly in the profile (legacy behavior, default) |
-| `env`         | Uses `ANTHROPIC_API_KEY` environment variable                     |
-| `credentials` | Uses the Anthropic key from Settings → API Keys                   |
-
-This allows:
-
-- A single API key to be shared across multiple profile configurations
-- "Direct Anthropic" profile that references saved credentials
-- Environment variable support for CI/CD and containerized deployments
-- Backwards compatibility with existing inline key profiles
-
-## Implementation Details
-
-### Type Changes
-
-#### New Type: `ApiKeySource`
+#### ClaudeCompatibleProvider
 
 ```typescript
-// libs/types/src/settings.ts
-export type ApiKeySource = 'inline' | 'env' | 'credentials';
-```
-
-#### Updated Interface: `ClaudeApiProfile`
-
-```typescript
-export interface ClaudeApiProfile {
-  id: string;
-  name: string;
-  baseUrl: string;
-
-  // NEW: API key sourcing strategy (default: 'inline' for backwards compat)
-  apiKeySource?: ApiKeySource;
-
-  // Now optional - only required when apiKeySource = 'inline'
-  apiKey?: string;
-
-  // Existing fields unchanged...
-  useAuthToken?: boolean;
-  timeoutMs?: number;
-  modelMappings?: { haiku?: string; sonnet?: string; opus?: string };
-  disableNonessentialTraffic?: boolean;
+export interface ClaudeCompatibleProvider {
+  id: string; // Unique identifier (UUID)
+  name: string; // Display name (e.g., "z.AI GLM")
+  baseUrl: string; // API endpoint URL
+  providerType?: string; // Provider type for icon/grouping (e.g., 'glm', 'minimax', 'openrouter')
+  apiKeySource?: ApiKeySource; // 'inline' | 'env' | 'credentials'
+  apiKey?: string; // API key (when apiKeySource = 'inline')
+  useAuthToken?: boolean; // Use ANTHROPIC_AUTH_TOKEN header
+  timeoutMs?: number; // Request timeout in milliseconds
+  disableNonessentialTraffic?: boolean; // Minimize non-essential API calls
+  enabled?: boolean; // Whether provider is active (default: true)
+  models?: ProviderModel[]; // Models exposed by this provider
 }
 ```
 
-#### Updated Interface: `ClaudeApiProfileTemplate`
+#### ProviderModel
 
 ```typescript
-export interface ClaudeApiProfileTemplate {
-  name: string;
-  baseUrl: string;
-  defaultApiKeySource?: ApiKeySource; // NEW: Suggested source for this template
-  useAuthToken: boolean;
-  // ... other fields
+export interface ProviderModel {
+  id: string; // Model ID sent to API (e.g., "GLM-4.7")
+  displayName: string; // Display name in UI (e.g., "GLM 4.7")
+  mapsToClaudeModel?: ClaudeModelAlias; // Which Claude tier this replaces ('haiku' | 'sonnet' | 'opus')
+  capabilities?: {
+    supportsVision?: boolean; // Whether model supports image inputs
+    supportsThinking?: boolean; // Whether model supports extended thinking
+    maxThinkingLevel?: ThinkingLevel; // Maximum thinking level if supported
+  };
+}
+```
+
+#### PhaseModelEntry
+
+Phase model configuration now supports provider models:
+
+```typescript
+export interface PhaseModelEntry {
+  providerId?: string; // Provider ID (undefined = native Claude)
+  model: string; // Model ID or alias
+  thinkingLevel?: ThinkingLevel; // 'none' | 'low' | 'medium' | 'high'
 }
 ```
 
 ### Provider Templates
 
-The following provider templates are available:
+Available provider templates in `CLAUDE_PROVIDER_TEMPLATES`:
 
-#### Direct Anthropic
+| Template         | Provider Type | Base URL                             | Description                   |
+| ---------------- | ------------- | ------------------------------------ | ----------------------------- |
+| Direct Anthropic | anthropic     | `https://api.anthropic.com`          | Standard Anthropic API        |
+| OpenRouter       | openrouter    | `https://openrouter.ai/api`          | Access Claude and 300+ models |
+| z.AI GLM         | glm           | `https://api.z.ai/api/anthropic`     | GLM models at lower cost      |
+| MiniMax          | minimax       | `https://api.minimax.io/anthropic`   | MiniMax M2.1 model            |
+| MiniMax (China)  | minimax       | `https://api.minimaxi.com/anthropic` | MiniMax for China region      |
 
-```typescript
-{
-  name: 'Direct Anthropic',
-  baseUrl: 'https://api.anthropic.com',
-  defaultApiKeySource: 'credentials',
-  useAuthToken: false,
-  description: 'Standard Anthropic API with your API key',
-  apiKeyUrl: 'https://console.anthropic.com/settings/keys',
-}
-```
+### Model Mappings
 
-#### OpenRouter
+Each provider model specifies which Claude model tier it maps to via `mapsToClaudeModel`:
 
-Access Claude and 300+ other models through OpenRouter's unified API.
+**z.AI GLM:**
 
-```typescript
-{
-  name: 'OpenRouter',
-  baseUrl: 'https://openrouter.ai/api',
-  defaultApiKeySource: 'inline',
-  useAuthToken: true,
-  description: 'Access Claude and 300+ models via OpenRouter',
-  apiKeyUrl: 'https://openrouter.ai/keys',
-}
-```
+- `GLM-4.5-Air` → haiku
+- `GLM-4.7` → sonnet, opus
 
-**Notes:**
+**MiniMax:**
 
-- Uses `ANTHROPIC_AUTH_TOKEN` with your OpenRouter API key
-- No model mappings by default - OpenRouter auto-maps Anthropic models
-- Can customize model mappings to use any OpenRouter-supported model (e.g., `openai/gpt-5.1-codex-max`)
+- `MiniMax-M2.1` → haiku, sonnet, opus
 
-#### z.AI GLM
+**OpenRouter:**
 
-```typescript
-{
-  name: 'z.AI GLM',
-  baseUrl: 'https://api.z.ai/api/anthropic',
-  defaultApiKeySource: 'inline',
-  useAuthToken: true,
-  timeoutMs: 3000000,
-  modelMappings: {
-    haiku: 'GLM-4.5-Air',
-    sonnet: 'GLM-4.7',
-    opus: 'GLM-4.7',
-  },
-  disableNonessentialTraffic: true,
-  description: '3× usage at fraction of cost via GLM Coding Plan',
-  apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list',
-}
-```
+- `anthropic/claude-3.5-haiku` → haiku
+- `anthropic/claude-3.5-sonnet` → sonnet
+- `anthropic/claude-3-opus` → opus
 
-#### MiniMax
+## Server-Side Implementation
 
-MiniMax M2.1 coding model with extended context support.
+### API Key Resolution
 
-```typescript
-{
-  name: 'MiniMax',
-  baseUrl: 'https://api.minimax.io/anthropic',
-  defaultApiKeySource: 'inline',
-  useAuthToken: true,
-  timeoutMs: 3000000,
-  modelMappings: {
-    haiku: 'MiniMax-M2.1',
-    sonnet: 'MiniMax-M2.1',
-    opus: 'MiniMax-M2.1',
-  },
-  disableNonessentialTraffic: true,
-  description: 'MiniMax M2.1 coding model with extended context',
-  apiKeyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key',
-}
-```
-
-#### MiniMax (China)
-
-Same as MiniMax but using the China-region endpoint.
-
-```typescript
-{
-  name: 'MiniMax (China)',
-  baseUrl: 'https://api.minimaxi.com/anthropic',
-  defaultApiKeySource: 'inline',
-  useAuthToken: true,
-  timeoutMs: 3000000,
-  modelMappings: {
-    haiku: 'MiniMax-M2.1',
-    sonnet: 'MiniMax-M2.1',
-    opus: 'MiniMax-M2.1',
-  },
-  disableNonessentialTraffic: true,
-  description: 'MiniMax M2.1 for users in China',
-  apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
-}
-```
-
-### Server-Side Changes
-
-#### 1. Environment Building (`claude-provider.ts`)
-
-The `buildEnv()` function now resolves API keys based on the `apiKeySource`:
+The `buildEnv()` function in `claude-provider.ts` resolves API keys based on `apiKeySource`:
 
 ```typescript
 function buildEnv(
-  profile?: ClaudeApiProfile,
-  credentials?: Credentials // NEW parameter
+  providerConfig?: ClaudeCompatibleProvider,
+  credentials?: Credentials
 ): Record<string, string | undefined> {
-  if (profile) {
-    // Resolve API key based on source strategy
+  if (providerConfig) {
     let apiKey: string | undefined;
-    const source = profile.apiKeySource ?? 'inline';
+    const source = providerConfig.apiKeySource ?? 'inline';
 
     switch (source) {
       case 'inline':
-        apiKey = profile.apiKey;
+        apiKey = providerConfig.apiKey;
         break;
       case 'env':
         apiKey = process.env.ANTHROPIC_API_KEY;
@@ -207,162 +117,183 @@ function buildEnv(
         apiKey = credentials?.apiKeys?.anthropic;
         break;
     }
-
-    // ... rest of profile-based env building
-  }
-  // ... no-profile fallback
-}
-```
-
-#### 2. Settings Helper (`settings-helpers.ts`)
-
-The `getActiveClaudeApiProfile()` function now returns both profile and credentials:
-
-```typescript
-export interface ActiveClaudeApiProfileResult {
-  profile: ClaudeApiProfile | undefined;
-  credentials: Credentials | undefined;
-}
-
-export async function getActiveClaudeApiProfile(
-  settingsService?: SettingsService | null,
-  logPrefix = '[SettingsHelper]'
-): Promise<ActiveClaudeApiProfileResult> {
-  // Returns both profile and credentials for API key resolution
-}
-```
-
-#### 3. Auto-Migration (`settings-service.ts`)
-
-A v4→v5 migration automatically creates a "Direct Anthropic" profile for existing users:
-
-```typescript
-// Migration v4 -> v5: Auto-create "Direct Anthropic" profile
-if (storedVersion < 5) {
-  const credentials = await this.getCredentials();
-  const hasAnthropicKey = !!credentials.apiKeys?.anthropic;
-  const hasNoProfiles = !result.claudeApiProfiles?.length;
-  const hasNoActiveProfile = !result.activeClaudeApiProfileId;
-
-  if (hasAnthropicKey && hasNoProfiles && hasNoActiveProfile) {
-    // Create "Direct Anthropic" profile with apiKeySource: 'credentials'
-    // and set it as active
+    // ... build environment with resolved key
   }
 }
 ```
 
-#### 4. Updated Call Sites
+### Provider Lookup
 
-All files that call `getActiveClaudeApiProfile()` were updated to:
+The `getProviderByModelId()` helper resolves provider configuration from model IDs:
 
-1. Destructure both `profile` and `credentials` from the result
-2. Pass `credentials` to the provider via `ExecuteOptions`
-
-**Files updated:**
-
-- `apps/server/src/services/agent-service.ts`
-- `apps/server/src/services/auto-mode-service.ts` (2 locations)
-- `apps/server/src/services/ideation-service.ts` (2 locations)
-- `apps/server/src/providers/simple-query-service.ts`
-- `apps/server/src/routes/enhance-prompt/routes/enhance.ts`
-- `apps/server/src/routes/context/routes/describe-file.ts`
-- `apps/server/src/routes/context/routes/describe-image.ts`
-- `apps/server/src/routes/github/routes/validate-issue.ts`
-- `apps/server/src/routes/worktree/routes/generate-commit-message.ts`
-- `apps/server/src/routes/features/routes/generate-title.ts`
-- `apps/server/src/routes/backlog-plan/generate-plan.ts`
-- `apps/server/src/routes/app-spec/sync-spec.ts`
-- `apps/server/src/routes/app-spec/generate-features-from-spec.ts`
-- `apps/server/src/routes/app-spec/generate-spec.ts`
-- `apps/server/src/routes/suggestions/generate-suggestions.ts`
-
-### UI Changes
-
-#### 1. Profile Form (`api-profiles-section.tsx`)
-
-Added an API Key Source selector dropdown:
-
-```tsx
-<Select
-  value={formData.apiKeySource}
-  onValueChange={(value: ApiKeySource) => setFormData({ ...formData, apiKeySource: value })}
->
-  <SelectContent>
-    <SelectItem value="credentials">Use saved API key (from Settings → API Keys)</SelectItem>
-    <SelectItem value="env">Use environment variable (ANTHROPIC_API_KEY)</SelectItem>
-    <SelectItem value="inline">Enter key for this profile only</SelectItem>
-  </SelectContent>
-</Select>
+```typescript
+export async function getProviderByModelId(
+  modelId: string,
+  settingsService: SettingsService,
+  logPrefix?: string
+): Promise<{
+  provider?: ClaudeCompatibleProvider;
+  resolvedModel?: string;
+  credentials?: Credentials;
+}>;
 ```
 
-The API Key input field is now conditionally rendered only when `apiKeySource === 'inline'`.
+This is used by all routes that call the Claude SDK to:
 
-#### 2. API Keys Section (`api-keys-section.tsx`)
+1. Check if the model ID belongs to a provider
+2. Get the provider configuration (baseUrl, auth, etc.)
+3. Resolve the `mapsToClaudeModel` for the SDK
 
-Added an informational note:
+### Phase Model Resolution
 
-> API Keys saved here can be used by API Profiles with "credentials" as the API key source. This lets you share a single key across multiple profile configurations without re-entering it.
+The `getPhaseModelWithOverrides()` helper gets effective phase model config:
 
-## User Flows
+```typescript
+export async function getPhaseModelWithOverrides(
+  phaseKey: PhaseModelKey,
+  settingsService: SettingsService,
+  projectPath?: string,
+  logPrefix?: string
+): Promise<{
+  model: string;
+  thinkingLevel?: ThinkingLevel;
+  providerId?: string;
+  providerConfig?: ClaudeCompatibleProvider;
+  credentials?: Credentials;
+}>;
+```
 
-### New User Flow
+This handles:
 
-1. Go to Settings → API Keys
-2. Enter Anthropic API key and save
-3. Go to Settings → Providers → Claude
-4. Create new profile from "Direct Anthropic" template
-5. API Key Source defaults to "credentials" - no need to re-enter key
-6. Save profile and set as active
+1. Project-level overrides (if projectPath provided)
+2. Global phase model settings
+3. Default fallback models
 
-### Existing User Migration
+## UI Implementation
 
-When an existing user with an Anthropic API key (but no profiles) loads settings:
+### Model Selection Dropdowns
 
-1. System detects v4→v5 migration needed
-2. Automatically creates "Direct Anthropic" profile with `apiKeySource: 'credentials'`
-3. Sets new profile as active
-4. User's existing workflow continues to work seamlessly
+Phase model selectors (`PhaseModelSelector`) display:
 
-### Environment Variable Flow
+1. **Claude Models** - Native Claude models (Haiku, Sonnet, Opus)
+2. **Provider Sections** - Each enabled provider as a separate group:
+   - Section header: `{provider.name} (via Claude)`
+   - Models with their mapped Claude tiers: "Maps to Haiku, Sonnet, Opus"
+   - Thinking level submenu for models that support it
 
-For CI/CD or containerized deployments:
+### Provider Icons
 
-1. Set `ANTHROPIC_API_KEY` in environment
-2. Create profile with `apiKeySource: 'env'`
-3. Profile will use the environment variable at runtime
+Icons are determined by `providerType`:
 
-## Backwards Compatibility
+- `glm` → Z logo
+- `minimax` → MiniMax logo
+- `openrouter` → OpenRouter logo
+- Generic → OpenRouter as fallback
 
-- Profiles without `apiKeySource` field default to `'inline'`
-- Existing profiles with inline `apiKey` continue to work unchanged
-- No changes to the credentials file format
-- Settings version bumped from 4 to 5 (migration is additive)
+### Bulk Replace
+
+The "Bulk Replace" feature allows switching all phase models to a provider at once:
+
+1. Select a provider from the dropdown
+2. Preview shows which models will be assigned:
+   - haiku phases → provider's haiku-mapped model
+   - sonnet phases → provider's sonnet-mapped model
+   - opus phases → provider's opus-mapped model
+3. Apply replaces all phase model configurations
+
+The Bulk Replace button only appears when at least one provider is enabled.
+
+## Project-Level Overrides
+
+Projects can override global phase model settings via `phaseModelOverrides`:
+
+```typescript
+interface Project {
+  // ...
+  phaseModelOverrides?: PhaseModelConfig; // Per-phase overrides
+}
+```
+
+### Storage
+
+Project overrides are stored in `.automaker/settings.json`:
+
+```json
+{
+  "phaseModelOverrides": {
+    "enhancementModel": {
+      "providerId": "provider-uuid",
+      "model": "GLM-4.5-Air",
+      "thinkingLevel": "none"
+    }
+  }
+}
+```
+
+### Resolution Priority
+
+1. Project override for specific phase (if set)
+2. Global phase model setting
+3. Default model for phase
+
+## Migration
+
+### v5 → v6 Migration
+
+The system migrated from `claudeApiProfiles` to `claudeCompatibleProviders`:
+
+```typescript
+// Old: modelMappings object
+{
+  modelMappings: {
+    haiku: 'GLM-4.5-Air',
+    sonnet: 'GLM-4.7',
+    opus: 'GLM-4.7'
+  }
+}
+
+// New: models array with mapsToClaudeModel
+{
+  models: [
+    { id: 'GLM-4.5-Air', displayName: 'GLM 4.5 Air', mapsToClaudeModel: 'haiku' },
+    { id: 'GLM-4.7', displayName: 'GLM 4.7', mapsToClaudeModel: 'sonnet' },
+    { id: 'GLM-4.7', displayName: 'GLM 4.7', mapsToClaudeModel: 'opus' },
+  ]
+}
+```
+
+The migration is automatic and preserves existing provider configurations.
 
 ## Files Changed
 
-| File                                                | Changes                                                                                |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `libs/types/src/settings.ts`                        | Added `ApiKeySource` type, updated `ClaudeApiProfile`, added Direct Anthropic template |
-| `libs/types/src/provider.ts`                        | Added `credentials` field to `ExecuteOptions`                                          |
-| `libs/types/src/index.ts`                           | Exported `ApiKeySource` type                                                           |
-| `apps/server/src/providers/claude-provider.ts`      | Updated `buildEnv()` to resolve keys from different sources                            |
-| `apps/server/src/lib/settings-helpers.ts`           | Updated return type to include credentials                                             |
-| `apps/server/src/services/settings-service.ts`      | Added v4→v5 auto-migration                                                             |
-| `apps/server/src/providers/simple-query-service.ts` | Added credentials passthrough                                                          |
-| `apps/server/src/services/*.ts`                     | Updated to pass credentials                                                            |
-| `apps/server/src/routes/**/*.ts`                    | Updated to pass credentials (15 files)                                                 |
-| `apps/ui/src/.../api-profiles-section.tsx`          | Added API Key Source selector                                                          |
-| `apps/ui/src/.../api-keys-section.tsx`              | Added profile usage note                                                               |
+### Types
+
+| File                         | Changes                                                              |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `libs/types/src/settings.ts` | `ClaudeCompatibleProvider`, `ProviderModel`, `PhaseModelEntry` types |
+| `libs/types/src/provider.ts` | `ExecuteOptions.claudeCompatibleProvider` field                      |
+| `libs/types/src/index.ts`    | Exports for new types                                                |
+
+### Server
+
+| File                                           | Changes                                                  |
+| ---------------------------------------------- | -------------------------------------------------------- |
+| `apps/server/src/providers/claude-provider.ts` | Provider config handling, buildEnv updates               |
+| `apps/server/src/lib/settings-helpers.ts`      | `getProviderByModelId()`, `getPhaseModelWithOverrides()` |
+| `apps/server/src/services/settings-service.ts` | v5→v6 migration                                          |
+| `apps/server/src/routes/**/*.ts`               | Provider lookup for all SDK calls                        |
+
+### UI
+
+| File                                               | Changes                                   |
+| -------------------------------------------------- | ----------------------------------------- |
+| `apps/ui/src/.../phase-model-selector.tsx`         | Provider model rendering, thinking levels |
+| `apps/ui/src/.../bulk-replace-dialog.tsx`          | Bulk replace feature                      |
+| `apps/ui/src/.../api-profiles-section.tsx`         | Provider management UI                    |
+| `apps/ui/src/components/ui/provider-icon.tsx`      | Provider-specific icons                   |
+| `apps/ui/src/hooks/use-project-settings-loader.ts` | Load phaseModelOverrides                  |
 
 ## Testing
-
-To verify the implementation:
-
-1. **New user flow**: Create "Direct Anthropic" profile, select `credentials` source, enter key in API Keys section → verify it works
-2. **Existing user migration**: User with credentials.json key sees auto-created "Direct Anthropic" profile
-3. **Env var support**: Create profile with `env` source, set ANTHROPIC_API_KEY → verify it works
-4. **z.AI GLM unchanged**: Existing profiles with inline keys continue working
-5. **Backwards compat**: Profiles without `apiKeySource` field default to `inline`
 
 ```bash
 # Build and run
@@ -373,76 +304,20 @@ npm run dev:web
 npm run test:server
 ```
 
-## Per-Project Profile Override
+### Test Cases
 
-Projects can override the global Claude API profile selection, allowing different projects to use different endpoints or configurations.
-
-### Configuration
-
-In **Project Settings → Claude**, users can select:
-
-| Option                   | Behavior                                                           |
-| ------------------------ | ------------------------------------------------------------------ |
-| **Use Global Setting**   | Inherits the active profile from global settings (default)         |
-| **Direct Anthropic API** | Explicitly uses direct Anthropic API, bypassing any global profile |
-| **\<Profile Name\>**     | Uses that specific profile for this project only                   |
-
-### Storage
-
-The per-project setting is stored in `.automaker/settings.json`:
-
-```json
-{
-  "activeClaudeApiProfileId": "profile-id-here"
-}
-```
-
-- `undefined` (or key absent): Use global setting
-- `null`: Explicitly use Direct Anthropic API
-- `"<id>"`: Use specific profile by ID
-
-### Implementation
-
-The `getActiveClaudeApiProfile()` function accepts an optional `projectPath` parameter:
-
-```typescript
-export async function getActiveClaudeApiProfile(
-  settingsService?: SettingsService | null,
-  logPrefix = '[SettingsHelper]',
-  projectPath?: string // Optional: check project settings first
-): Promise<ActiveClaudeApiProfileResult>;
-```
-
-When `projectPath` is provided:
-
-1. Project settings are checked first for `activeClaudeApiProfileId`
-2. If project has a value (including `null`), that takes precedence
-3. If project has no override (`undefined`), falls back to global setting
-
-### Scope
-
-**Important:** Per-project profiles only affect Claude model calls. When other providers are used (Codex, OpenCode, Cursor), the Claude API profile setting has no effect—those providers use their own configuration.
-
-Affected operations when using Claude models:
-
-- Agent chat and feature implementation
-- Code analysis and suggestions
-- Commit message generation
-- Spec generation and sync
-- Issue validation
-- Backlog planning
-
-### Use Cases
-
-1. **Experimentation**: Test z.AI GLM or MiniMax on a side project while keeping production projects on Direct Anthropic
-2. **Cost optimization**: Use cheaper endpoints for hobby projects, premium for work projects
-3. **Regional compliance**: Use China endpoints for projects with data residency requirements
+1. **Provider setup**: Add z.AI GLM provider with inline API key
+2. **Model selection**: Select GLM-4.7 for a phase, verify it appears in dropdown
+3. **Thinking levels**: Select thinking level for provider model
+4. **Bulk replace**: Switch all phases to a provider at once
+5. **Project override**: Set per-project model override, verify it persists
+6. **Provider deletion**: Delete all providers, verify empty state persists
 
 ## Future Enhancements
 
-Potential future improvements:
+Potential improvements:
 
-1. **UI indicators**: Show whether credentials/env key is configured when selecting those sources
-2. **Validation**: Warn if selected source has no key configured
-3. **Per-provider credentials**: Support different credential keys for different providers
-4. **Key rotation**: Support for rotating keys without updating profiles
+1. **Provider validation**: Test API connection before saving
+2. **Usage tracking**: Show which phases use which provider
+3. **Cost estimation**: Display estimated costs per provider
+4. **Model capabilities**: Auto-detect supported features from provider

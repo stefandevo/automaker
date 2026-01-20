@@ -22,7 +22,7 @@ import type { SettingsService } from '../../../services/settings-service.js';
 import {
   getAutoLoadClaudeMdSetting,
   getPromptCustomization,
-  getActiveClaudeApiProfile,
+  getPhaseModelWithOverrides,
 } from '../../../lib/settings-helpers.js';
 
 const logger = createLogger('DescribeFile');
@@ -156,21 +156,28 @@ ${contentToAnalyze}`;
         '[DescribeFile]'
       );
 
-      // Get model from phase settings
-      const settings = await settingsService?.getGlobalSettings();
-      logger.info(`Raw phaseModels from settings:`, JSON.stringify(settings?.phaseModels, null, 2));
-      const phaseModelEntry =
-        settings?.phaseModels?.fileDescriptionModel || DEFAULT_PHASE_MODELS.fileDescriptionModel;
-      logger.info(`fileDescriptionModel entry:`, JSON.stringify(phaseModelEntry));
+      // Get model from phase settings with provider info
+      const {
+        phaseModel: phaseModelEntry,
+        provider,
+        credentials,
+      } = settingsService
+        ? await getPhaseModelWithOverrides(
+            'fileDescriptionModel',
+            settingsService,
+            cwd,
+            '[DescribeFile]'
+          )
+        : {
+            phaseModel: DEFAULT_PHASE_MODELS.fileDescriptionModel,
+            provider: undefined,
+            credentials: undefined,
+          };
       const { model, thinkingLevel } = resolvePhaseModel(phaseModelEntry);
 
-      logger.info(`Resolved model: ${model}, thinkingLevel: ${thinkingLevel}`);
-
-      // Get active Claude API profile for alternative endpoint configuration
-      const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-        settingsService,
-        '[DescribeFile]',
-        cwd
+      logger.info(
+        `Resolved model: ${model}, thinkingLevel: ${thinkingLevel}`,
+        provider ? `via provider: ${provider.name}` : 'direct API'
       );
 
       // Use simpleQuery - provider abstraction handles routing to correct provider
@@ -183,7 +190,7 @@ ${contentToAnalyze}`;
         thinkingLevel,
         readOnly: true, // File description only reads, doesn't write
         settingSources: autoLoadClaudeMd ? ['user', 'project', 'local'] : undefined,
-        claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+        claudeCompatibleProvider: provider, // Pass provider for alternative endpoint configuration
         credentials, // Pass credentials for resolving 'credentials' apiKeySource
       });
 

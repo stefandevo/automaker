@@ -523,6 +523,15 @@ function getUnderlyingModelIcon(model?: AgentModel | string): ProviderIconKey {
     }
   }
 
+  // Check for ClaudeCompatibleProvider model patterns (GLM, MiniMax, etc.)
+  // These are model IDs like "GLM-4.5-Air", "GLM-4.7", "MiniMax-M2.1"
+  if (modelStr.includes('glm')) {
+    return 'glm';
+  }
+  if (modelStr.includes('minimax')) {
+    return 'minimax';
+  }
+
   // Check for Cursor-specific models with underlying providers
   if (modelStr.includes('sonnet') || modelStr.includes('opus') || modelStr.includes('claude')) {
     return 'anthropic';

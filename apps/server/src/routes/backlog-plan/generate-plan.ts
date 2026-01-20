@@ -28,7 +28,7 @@ import type { SettingsService } from '../../services/settings-service.js';
 import {
   getAutoLoadClaudeMdSetting,
   getPromptCustomization,
-  getActiveClaudeApiProfile,
+  getPhaseModelWithOverrides,
 } from '../../lib/settings-helpers.js';
 
 const featureLoader = new FeatureLoader();
@@ -121,18 +121,39 @@ export async function generateBacklogPlan(
       content: 'Generating plan with AI...',
     });
 
-    // Get the model to use from settings or provided override
+    // Get the model to use from settings or provided override with provider info
     let effectiveModel = model;
     let thinkingLevel: ThinkingLevel | undefined;
-    if (!effectiveModel) {
-      const settings = await settingsService?.getGlobalSettings();
-      const phaseModelEntry =
-        settings?.phaseModels?.backlogPlanningModel || DEFAULT_PHASE_MODELS.backlogPlanningModel;
-      const resolved = resolvePhaseModel(phaseModelEntry);
+    let claudeCompatibleProvider: import('@automaker/types').ClaudeCompatibleProvider | undefined;
+    let credentials: import('@automaker/types').Credentials | undefined;
+
+    if (effectiveModel) {
+      // Use explicit override - just get credentials
+      credentials = await settingsService?.getCredentials();
+    } else if (settingsService) {
+      // Use settings-based model with provider info
+      const phaseResult = await getPhaseModelWithOverrides(
+        'backlogPlanningModel',
+        settingsService,
+        projectPath,
+        '[BacklogPlan]'
+      );
+      const resolved = resolvePhaseModel(phaseResult.phaseModel);
+      effectiveModel = resolved.model;
+      thinkingLevel = resolved.thinkingLevel;
+      claudeCompatibleProvider = phaseResult.provider;
+      credentials = phaseResult.credentials;
+    } else {
+      // Fallback to defaults
+      const resolved = resolvePhaseModel(DEFAULT_PHASE_MODELS.backlogPlanningModel);
       effectiveModel = resolved.model;
       thinkingLevel = resolved.thinkingLevel;
     }
-    logger.info('[BacklogPlan] Using model:', effectiveModel);
+    logger.info(
+      '[BacklogPlan] Using model:',
+      effectiveModel,
+      claudeCompatibleProvider ? `via provider: ${claudeCompatibleProvider.name}` : 'direct API'
+    );
 
     const provider = ProviderFactory.getProviderForModel(effectiveModel);
     // Strip provider prefix - providers expect bare model IDs
@@ -165,13 +186,6 @@ ${userPrompt}`;
       finalSystemPrompt = undefined; // System prompt is now embedded in the user prompt
     }
 
-    // Get active Claude API profile for alternative endpoint configuration
-    const { profile: claudeApiProfile, credentials } = await getActiveClaudeApiProfile(
-      settingsService,
-      '[BacklogPlan]',
-      projectPath
-    );
-
     // Execute the query
     const stream = provider.executeQuery({
       prompt: finalPrompt,
@@ -184,7 +198,7 @@ ${userPrompt}`;
       settingSources: autoLoadClaudeMd ? ['user', 'project'] : undefined,
       readOnly: true, // Plan generation only generates text, doesn't write files
       thinkingLevel, // Pass thinking level for extended thinking
-      claudeApiProfile, // Pass active Claude API profile for alternative endpoint configuration
+      claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
       credentials, // Pass credentials for resolving 'credentials' apiKeySource
     });
 

@@ -105,7 +105,7 @@ export function ApiKeysSection() {
         {providerConfigs.map((provider) => (
           <div key={provider.key}>
             <ApiKeyField config={provider} />
-            {/* Anthropic-specific profile info */}
+            {/* Anthropic-specific provider info */}
             {provider.key === 'anthropic' && (
               <div className="mt-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
                 <div className="flex gap-2">
@@ -113,20 +113,19 @@ export function ApiKeysSection() {
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p>
                       <span className="font-medium text-foreground/80">
-                        Using Claude API Profiles?
+                        Using Claude Compatible Providers?
                       </span>{' '}
-                      Create a profile in{' '}
-                      <span className="text-blue-500">AI Providers → Claude</span> with{' '}
+                      Add a provider in <span className="text-blue-500">AI Providers → Claude</span>{' '}
+                      with{' '}
                       <span className="font-mono text-[10px] bg-muted/50 px-1 rounded">
                         credentials
                       </span>{' '}
                       as the API key source to use this key.
                     </p>
                     <p>
-                      For alternative providers (z.AI GLM, MiniMax, OpenRouter), create a profile
-                      with{' '}
+                      For alternative providers (z.AI GLM, MiniMax, OpenRouter), add a provider with{' '}
                       <span className="font-mono text-[10px] bg-muted/50 px-1 rounded">inline</span>{' '}
-                      key source and enter the provider's API key directly in the profile.
+                      key source and enter the provider's API key directly.
                     </p>
                   </div>
                 </div>
