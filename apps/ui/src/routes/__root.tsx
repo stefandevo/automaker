@@ -40,9 +40,7 @@ import { useIsCompact } from '@/hooks/use-media-query';
 import type { Project } from '@/lib/electron';
 
 const logger = createLogger('RootLayout');
-// DevTools are only available in development mode and can be hidden via env variable
 const IS_DEV = import.meta.env.DEV;
-const ENV_HIDE_DEVTOOLS = import.meta.env.VITE_HIDE_QUERY_DEVTOOLS === 'true';
 const SERVER_READY_MAX_ATTEMPTS = 8;
 const SERVER_READY_BACKOFF_BASE_MS = 250;
 const SERVER_READY_MAX_DELAY_MS = 1500;
@@ -902,8 +900,8 @@ function RootLayout() {
   // Get the user's preference for showing devtools from the app store
   const showQueryDevtools = useAppStore((state) => state.showQueryDevtools);
 
-  // Show devtools only if: in dev mode, not hidden via env, user setting enabled, and not compact screen
-  const shouldShowDevtools = IS_DEV && !ENV_HIDE_DEVTOOLS && showQueryDevtools && !isCompact;
+  // Show devtools only if: in dev mode, user setting enabled, and not compact screen
+  const shouldShowDevtools = IS_DEV && showQueryDevtools && !isCompact;
 
   return (
     <QueryClientProvider client={queryClient}>
