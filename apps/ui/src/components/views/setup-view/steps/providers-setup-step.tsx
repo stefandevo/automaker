@@ -1394,14 +1394,14 @@ function GeminiContent() {
               <p className="font-medium text-foreground text-sm">Install Gemini CLI:</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono text-foreground overflow-x-auto">
-                  {geminiCliStatus?.installCommand || 'npm install -g @anthropic/gemini-cli'}
+                  {geminiCliStatus?.installCommand || 'npm install -g @google/gemini-cli'}
                 </code>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() =>
                     copyCommand(
-                      geminiCliStatus?.installCommand || 'npm install -g @anthropic/gemini-cli'
+                      geminiCliStatus?.installCommand || 'npm install -g @google/gemini-cli'
                     )
                   }
                 >

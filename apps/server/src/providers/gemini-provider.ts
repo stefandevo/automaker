@@ -10,7 +10,7 @@
  */
 
 import { execSync } from 'child_process';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { CliProvider, type CliSpawnConfig, type CliErrorInfo } from './cli-provider.js';
@@ -41,8 +41,8 @@ const logger = createLogger('GeminiProvider');
  * {"type":"init","timestamp":"...","session_id":"...","model":"..."}
  * {"type":"message","timestamp":"...","role":"user","content":"..."}
  * {"type":"message","timestamp":"...","role":"assistant","content":"...","delta":true}
- * {"type":"tool_use","timestamp":"...","tool_use_id":"...","name":"...","input":{...}}
- * {"type":"tool_result","timestamp":"...","tool_use_id":"...","content":"..."}
+ * {"type":"tool_use","timestamp":"...","tool_name":"...","tool_id":"...","parameters":{...}}
+ * {"type":"tool_result","timestamp":"...","tool_id":"...","status":"success","output":"..."}
  * {"type":"result","timestamp":"...","status":"success","stats":{...}}
  */
 interface GeminiStreamEvent {
@@ -150,7 +150,7 @@ export class GeminiProvider extends CliProvider {
   getSpawnConfig(): CliSpawnConfig {
     return {
       windowsStrategy: 'npx', // Gemini CLI can be run via npx
-      npxPackage: '@anthropic-ai/gemini-cli', // Placeholder - actual package name TBD
+      npxPackage: '@google/gemini-cli', // Official Google Gemini CLI package
       commonPaths: {
         linux: [
           path.join(os.homedir(), '.local/bin/gemini'),
@@ -432,7 +432,7 @@ export class GeminiProvider extends CliProvider {
    * Override install instructions for Gemini-specific guidance
    */
   protected getInstallInstructions(): string {
-    return 'Install with: npm install -g @anthropic-ai/gemini-cli (or visit https://github.com/google-gemini/gemini-cli)';
+    return 'Install with: npm install -g @google/gemini-cli (or visit https://github.com/google-gemini/gemini-cli)';
   }
 
   /**
@@ -582,10 +582,11 @@ export class GeminiProvider extends CliProvider {
     let hasCredentialsFile = false;
     let authType: string | null = null;
 
-    if (fs.existsSync(settingsPath)) {
+    try {
+      await fs.access(settingsPath);
       logger.debug(`checkAuth: Found settings file at ${settingsPath}`);
       try {
-        const content = fs.readFileSync(settingsPath, 'utf8');
+        const content = await fs.readFile(settingsPath, 'utf8');
         const settings = JSON.parse(content);
 
         // Auth config is at security.auth.selectedType (e.g., "oauth-personal", "oauth-adc", "api-key")
@@ -600,7 +601,7 @@ export class GeminiProvider extends CliProvider {
       } catch (e) {
         logger.debug(`checkAuth: Failed to parse settings file: ${e}`);
       }
-    } else {
+    } catch {
       logger.debug('checkAuth: No settings file found');
     }
 

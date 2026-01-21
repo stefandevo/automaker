@@ -4,7 +4,7 @@
 
 import type { Request, Response } from 'express';
 import { getErrorMessage, logError } from '../common.js';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 
 const DISCONNECTED_MARKER_FILE = '.gemini-disconnected';
@@ -21,8 +21,10 @@ export function createAuthGeminiHandler() {
       const markerPath = path.join(automakerDir, DISCONNECTED_MARKER_FILE);
 
       // Remove the disconnection marker if it exists
-      if (fs.existsSync(markerPath)) {
-        fs.unlinkSync(markerPath);
+      try {
+        await fs.unlink(markerPath);
+      } catch {
+        // File doesn't exist, nothing to remove
       }
 
       res.json({

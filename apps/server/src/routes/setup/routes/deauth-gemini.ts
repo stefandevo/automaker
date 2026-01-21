@@ -4,7 +4,7 @@
 
 import type { Request, Response } from 'express';
 import { getErrorMessage, logError } from '../common.js';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 
 const DISCONNECTED_MARKER_FILE = '.gemini-disconnected';
@@ -20,14 +20,12 @@ export function createDeauthGeminiHandler() {
       const automakerDir = path.join(projectRoot, '.automaker');
 
       // Ensure .automaker directory exists
-      if (!fs.existsSync(automakerDir)) {
-        fs.mkdirSync(automakerDir, { recursive: true });
-      }
+      await fs.mkdir(automakerDir, { recursive: true });
 
       const markerPath = path.join(automakerDir, DISCONNECTED_MARKER_FILE);
 
       // Create the disconnection marker
-      fs.writeFileSync(markerPath, 'Gemini CLI disconnected from app');
+      await fs.writeFile(markerPath, 'Gemini CLI disconnected from app');
 
       res.json({
         success: true,

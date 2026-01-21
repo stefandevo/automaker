@@ -5,16 +5,17 @@
 import type { Request, Response } from 'express';
 import { GeminiProvider } from '../../../providers/gemini-provider.js';
 import { getErrorMessage, logError } from '../common.js';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 
 const DISCONNECTED_MARKER_FILE = '.gemini-disconnected';
 
-function isGeminiDisconnectedFromApp(): boolean {
+async function isGeminiDisconnectedFromApp(): Promise<boolean> {
   try {
     const projectRoot = process.cwd();
     const markerPath = path.join(projectRoot, '.automaker', DISCONNECTED_MARKER_FILE);
-    return fs.existsSync(markerPath);
+    await fs.access(markerPath);
+    return true;
   } catch {
     return false;
   }
@@ -25,13 +26,13 @@ function isGeminiDisconnectedFromApp(): boolean {
  * Returns Gemini CLI installation and authentication status
  */
 export function createGeminiStatusHandler() {
-  const installCommand = 'npm install -g @anthropic-ai/gemini-cli';
+  const installCommand = 'npm install -g @google/gemini-cli';
   const loginCommand = 'gemini';
 
   return async (_req: Request, res: Response): Promise<void> => {
     try {
       // Check if user has manually disconnected from the app
-      if (isGeminiDisconnectedFromApp()) {
+      if (await isGeminiDisconnectedFromApp()) {
         res.json({
           success: true,
           installed: true,
