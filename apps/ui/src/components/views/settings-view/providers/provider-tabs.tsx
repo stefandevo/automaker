@@ -1,6 +1,12 @@
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AnthropicIcon, CursorIcon, OpenAIIcon, GeminiIcon, OpenCodeIcon } from '@/components/ui/provider-icon';
+import {
+  AnthropicIcon,
+  CursorIcon,
+  OpenAIIcon,
+  GeminiIcon,
+  OpenCodeIcon,
+} from '@/components/ui/provider-icon';
 import { CursorSettingsTab } from './cursor-settings-tab';
 import { ClaudeSettingsTab } from './claude-settings-tab';
 import { CodexSettingsTab } from './codex-settings-tab';

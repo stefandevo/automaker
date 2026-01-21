@@ -7,7 +7,13 @@
 
 import { BaseProvider } from './base-provider.js';
 import type { InstallationStatus, ModelDefinition } from './types.js';
-import { isCursorModel, isCodexModel, isOpencodeModel, isGeminiModel, type ModelProvider } from '@automaker/types';
+import {
+  isCursorModel,
+  isCodexModel,
+  isOpencodeModel,
+  isGeminiModel,
+  type ModelProvider,
+} from '@automaker/types';
 import * as fs from 'fs';
 import * as path from 'path';
 

@@ -31,7 +31,13 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { AnthropicIcon, CursorIcon, OpenAIIcon, OpenCodeIcon, GeminiIcon } from '@/components/ui/provider-icon';
+import {
+  AnthropicIcon,
+  CursorIcon,
+  OpenAIIcon,
+  OpenCodeIcon,
+  GeminiIcon,
+} from '@/components/ui/provider-icon';
 import { TerminalOutput } from '../components';
 import { useCliInstallation, useTokenSave } from '../hooks';
 
@@ -1394,7 +1400,9 @@ function GeminiContent() {
                   variant="ghost"
                   size="icon"
                   onClick={() =>
-                    copyCommand(geminiCliStatus?.installCommand || 'npm install -g @anthropic/gemini-cli')
+                    copyCommand(
+                      geminiCliStatus?.installCommand || 'npm install -g @anthropic/gemini-cli'
+                    )
                   }
                 >
                   <Copy className="w-4 h-4" />
@@ -1443,7 +1451,9 @@ function GeminiContent() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => copyCommand(geminiCliStatus?.loginCommand || 'gemini auth login')}
+                      onClick={() =>
+                        copyCommand(geminiCliStatus?.loginCommand || 'gemini auth login')
+                      }
                     >
                       <Copy className="w-4 h-4" />
                     </Button>
