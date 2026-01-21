@@ -1902,15 +1902,14 @@ export function PhaseModelSelector({
             );
           })}
 
-          {!isCursorDisabled &&
-            (groupedModels.length > 0 || standaloneCursorModels.length > 0) && (
-              <CommandGroup heading="Cursor Models">
-                {/* Grouped models with secondary popover */}
-                {groupedModels.map((group) => renderGroupedModelItem(group))}
-                {/* Standalone models */}
-                {standaloneCursorModels.map((model) => renderCursorModelItem(model))}
-              </CommandGroup>
-            )}
+          {!isCursorDisabled && (groupedModels.length > 0 || standaloneCursorModels.length > 0) && (
+            <CommandGroup heading="Cursor Models">
+              {/* Grouped models with secondary popover */}
+              {groupedModels.map((group) => renderGroupedModelItem(group))}
+              {/* Standalone models */}
+              {standaloneCursorModels.map((model) => renderCursorModelItem(model))}
+            </CommandGroup>
+          )}
 
           {codex.length > 0 && (
             <CommandGroup heading="Codex Models">
