@@ -1533,7 +1533,7 @@ const initialState: AppState = {
   specCreatingForProject: null,
   defaultPlanningMode: 'skip' as PlanningMode,
   defaultRequirePlanApproval: false,
-  defaultFeatureModel: { model: 'opus' } as PhaseModelEntry,
+  defaultFeatureModel: { model: 'claude-opus' } as PhaseModelEntry,
   pendingPlanApproval: null,
   claudeRefreshInterval: 60,
   claudeUsage: null,
@@ -2113,7 +2113,9 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     // Clear all model overrides from project (phaseModelOverrides + defaultFeatureModel)
     const projects = get().projects.map((p) =>
-      p.id === projectId ? { ...p, phaseModelOverrides: undefined, defaultFeatureModel: undefined } : p
+      p.id === projectId
+        ? { ...p, phaseModelOverrides: undefined, defaultFeatureModel: undefined }
+        : p
     );
     set({ projects });
 
@@ -2620,7 +2622,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     await syncSettingsToServer();
   },
   resetPhaseModels: async () => {
-    set({ phaseModels: DEFAULT_PHASE_MODELS });
+    set({
+      phaseModels: DEFAULT_PHASE_MODELS,
+      defaultFeatureModel: { model: 'claude-opus' },
+    });
     // Sync to server settings file
     const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
     await syncSettingsToServer();
