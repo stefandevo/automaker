@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getElectronAPI } from '@/lib/electron';
 import { queryKeys } from '@/lib/query-keys';
 import { STALE_TIMES } from '@/lib/query-client';
+import { getGlobalEventsRecent } from '@/hooks/use-event-recency';
 import type { Feature } from '@/store/app-store';
 
 const FEATURES_REFETCH_ON_FOCUS = false;
@@ -79,7 +80,11 @@ export function useFeature(
     },
     enabled: !!projectPath && !!featureId && enabled,
     staleTime: STALE_TIMES.FEATURES,
-    refetchInterval: pollingInterval,
+    // When a polling interval is specified, disable it if WebSocket events are recent
+    refetchInterval:
+      pollingInterval === false || pollingInterval === undefined
+        ? pollingInterval
+        : () => (getGlobalEventsRecent() ? false : pollingInterval),
     refetchOnWindowFocus: FEATURES_REFETCH_ON_FOCUS,
     refetchOnReconnect: FEATURES_REFETCH_ON_RECONNECT,
   });
@@ -119,11 +124,16 @@ export function useAgentOutput(
     },
     enabled: !!projectPath && !!featureId && enabled,
     staleTime: STALE_TIMES.AGENT_OUTPUT,
-    // Use provided polling interval or default behavior
+    // Use provided polling interval or default smart behavior
     refetchInterval:
       pollingInterval !== undefined
         ? pollingInterval
         : (query) => {
+            // Disable polling when WebSocket events are recent (within 5s)
+            // WebSocket invalidation handles updates in real-time
+            if (getGlobalEventsRecent()) {
+              return false;
+            }
             // Only poll if we have data and it's not empty (indicating active task)
             if (query.state.data && query.state.data.length > 0) {
               return 5000; // 5 seconds
