@@ -18,6 +18,7 @@ import {
   Pencil,
   FilePlus,
   MoreVertical,
+  ArrowLeft,
 } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -67,6 +68,9 @@ export function MemoryView() {
 
   // Actions panel state (for tablet/mobile)
   const [showActionsPanel, setShowActionsPanel] = useState(false);
+
+  // Mobile panel state - 'list' shows file list, 'editor' shows editor
+  const [mobilePanel, setMobilePanel] = useState<'list' | 'editor'>('list');
 
   // Get memory directory path
   const getMemoryPath = useCallback(() => {
@@ -135,6 +139,13 @@ export function MemoryView() {
     }
     loadFileContent(file);
     setIsPreviewMode(true);
+    // Switch to editor panel on mobile
+    setMobilePanel('editor');
+  };
+
+  // Go back to file list on mobile
+  const handleBackToList = () => {
+    setMobilePanel('list');
   };
 
   // Save current file
@@ -381,7 +392,15 @@ export function MemoryView() {
       {/* Main content area with file list and editor */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - File List */}
-        <div className="w-64 border-r border-border flex flex-col overflow-hidden">
+        <div
+          className={cn(
+            'border-r border-border flex flex-col overflow-hidden',
+            // On mobile: full width when showing list, hidden when showing editor
+            mobilePanel === 'list' ? 'flex-1 md:flex-none' : 'hidden md:flex',
+            // On tablet/desktop: fixed width
+            'md:w-64'
+          )}
+        >
           <div className="p-3 border-b border-border">
             <h2 className="text-sm font-semibold text-muted-foreground">
               Memory Files ({memoryFiles.length})
@@ -455,12 +474,28 @@ export function MemoryView() {
         </div>
 
         {/* Right Panel - Editor/Preview */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div
+          className={cn(
+            'flex-1 flex flex-col overflow-hidden',
+            // On mobile: hidden when showing list, visible when showing editor
+            mobilePanel === 'editor' ? 'flex' : 'hidden md:flex'
+          )}
+        >
           {selectedFile ? (
             <>
               {/* File toolbar */}
               <div className="flex items-center justify-between p-3 border-b border-border bg-card">
                 <div className="flex items-center gap-2 min-w-0">
+                  {/* Back button for mobile */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleBackToList}
+                    className="md:hidden -ml-2 mr-1"
+                    data-testid="back-to-list-button"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
                   <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <span className="text-sm font-medium truncate">{selectedFile.name}</span>
                 </div>
@@ -542,7 +577,7 @@ export function MemoryView() {
       <Dialog open={isCreateMemoryOpen} onOpenChange={setIsCreateMemoryOpen}>
         <DialogContent
           data-testid="create-memory-dialog"
-          className="w-[60vw] max-w-[60vw] max-h-[80vh] flex flex-col"
+          className="w-[95vw] max-w-[95vw] md:w-[60vw] md:max-w-[60vw] max-h-[80vh] flex flex-col"
         >
           <DialogHeader>
             <DialogTitle>Create Memory File</DialogTitle>

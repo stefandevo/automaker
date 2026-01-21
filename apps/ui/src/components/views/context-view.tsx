@@ -24,6 +24,7 @@ import {
   FilePlus,
   FileUp,
   MoreVertical,
+  ArrowLeft,
 } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -99,6 +100,9 @@ export function ContextView() {
 
   // Actions panel state (for tablet/mobile)
   const [showActionsPanel, setShowActionsPanel] = useState(false);
+
+  // Mobile panel state - 'list' shows file list, 'editor' shows editor
+  const [mobilePanel, setMobilePanel] = useState<'list' | 'editor'>('list');
 
   // File input ref for import
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -243,6 +247,13 @@ export function ContextView() {
     }
     loadFileContent(file);
     setIsPreviewMode(isMarkdownFile(file.name));
+    // Switch to editor panel on mobile
+    setMobilePanel('editor');
+  };
+
+  // Go back to file list on mobile
+  const handleBackToList = () => {
+    setMobilePanel('list');
   };
 
   // Save current file
@@ -796,7 +807,15 @@ export function ContextView() {
         )}
 
         {/* Left Panel - File List */}
-        <div className="w-64 border-r border-border flex flex-col overflow-hidden">
+        <div
+          className={cn(
+            'border-r border-border flex flex-col overflow-hidden',
+            // On mobile: full width when showing list, hidden when showing editor
+            mobilePanel === 'list' ? 'flex-1 md:flex-none' : 'hidden md:flex',
+            // On tablet/desktop: fixed width
+            'md:w-64'
+          )}
+        >
           <div className="p-3 border-b border-border">
             <h2 className="text-sm font-semibold text-muted-foreground">
               Context Files ({contextFiles.length})
@@ -887,12 +906,28 @@ export function ContextView() {
         </div>
 
         {/* Right Panel - Editor/Preview */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div
+          className={cn(
+            'flex-1 flex flex-col overflow-hidden',
+            // On mobile: hidden when showing list, visible when showing editor
+            mobilePanel === 'editor' ? 'flex' : 'hidden md:flex'
+          )}
+        >
           {selectedFile ? (
             <>
               {/* File toolbar */}
               <div className="flex items-center justify-between p-3 border-b border-border bg-card">
                 <div className="flex items-center gap-2 min-w-0">
+                  {/* Back button for mobile */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleBackToList}
+                    className="md:hidden -ml-2 mr-1"
+                    data-testid="back-to-list-button"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
                   {selectedFile.type === 'image' ? (
                     <ImageIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   ) : (
@@ -1025,7 +1060,7 @@ export function ContextView() {
       <Dialog open={isCreateMarkdownOpen} onOpenChange={setIsCreateMarkdownOpen}>
         <DialogContent
           data-testid="create-markdown-dialog"
-          className="w-[60vw] max-w-[60vw] max-h-[80vh] flex flex-col"
+          className="w-[95vw] max-w-[95vw] md:w-[60vw] md:max-w-[60vw] max-h-[80vh] flex flex-col"
         >
           <DialogHeader>
             <DialogTitle>Create Markdown Context</DialogTitle>
