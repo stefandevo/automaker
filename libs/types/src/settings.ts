@@ -1186,6 +1186,13 @@ export interface ProjectSettings {
    */
   phaseModelOverrides?: Partial<PhaseModelConfig>;
 
+  // Feature Defaults Override (per-project)
+  /**
+   * Override the default model for new feature cards in this project.
+   * If not specified, falls back to the global defaultFeatureModel setting.
+   */
+  defaultFeatureModel?: PhaseModelEntry;
+
   // Deprecated Claude API Profile Override
   /**
    * @deprecated Use phaseModelOverrides instead.

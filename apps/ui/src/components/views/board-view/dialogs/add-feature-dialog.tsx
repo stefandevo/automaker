@@ -195,8 +195,16 @@ export function AddFeatureDialog({
   const [childDependencies, setChildDependencies] = useState<string[]>([]);
 
   // Get defaults from store
-  const { defaultPlanningMode, defaultRequirePlanApproval, useWorktrees, defaultFeatureModel } =
-    useAppStore();
+  const {
+    defaultPlanningMode,
+    defaultRequirePlanApproval,
+    useWorktrees,
+    defaultFeatureModel,
+    currentProject,
+  } = useAppStore();
+
+  // Use project-level default feature model if set, otherwise fall back to global
+  const effectiveDefaultFeatureModel = currentProject?.defaultFeatureModel ?? defaultFeatureModel;
 
   // Track previous open state to detect when dialog opens
   const wasOpenRef = useRef(false);
@@ -216,7 +224,7 @@ export function AddFeatureDialog({
       );
       setPlanningMode(defaultPlanningMode);
       setRequirePlanApproval(defaultRequirePlanApproval);
-      setModelEntry(defaultFeatureModel);
+      setModelEntry(effectiveDefaultFeatureModel);
 
       // Initialize description history (empty for new feature)
       setDescriptionHistory([]);
@@ -241,7 +249,7 @@ export function AddFeatureDialog({
     defaultBranch,
     defaultPlanningMode,
     defaultRequirePlanApproval,
-    defaultFeatureModel,
+    effectiveDefaultFeatureModel,
     useWorktrees,
     selectedNonMainWorktreeBranch,
     forceCurrentBranchMode,
@@ -343,7 +351,7 @@ export function AddFeatureDialog({
     // When a non-main worktree is selected, use its branch name for custom mode
     setBranchName(selectedNonMainWorktreeBranch || '');
     setPriority(2);
-    setModelEntry(defaultFeatureModel);
+    setModelEntry(effectiveDefaultFeatureModel);
     setWorkMode(
       getDefaultWorkMode(useWorktrees, selectedNonMainWorktreeBranch, forceCurrentBranchMode)
     );

@@ -3412,6 +3412,11 @@ export interface Project {
    * If a phase is not present, the global setting is used.
    */
   phaseModelOverrides?: Partial<import('@automaker/types').PhaseModelConfig>;
+  /**
+   * Override the default model for new feature cards in this project.
+   * If not specified, falls back to the global defaultFeatureModel setting.
+   */
+  defaultFeatureModel?: import('@automaker/types').PhaseModelEntry;
 }
 
 export interface TrashedProject extends Project {

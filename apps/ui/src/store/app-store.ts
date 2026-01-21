@@ -42,6 +42,7 @@ import {
   DEFAULT_PHASE_MODELS,
   DEFAULT_OPENCODE_MODEL,
   DEFAULT_MAX_CONCURRENCY,
+  DEFAULT_GLOBAL_SETTINGS,
 } from '@automaker/types';
 
 const logger = createLogger('AppStore');
@@ -1055,6 +1056,12 @@ export interface AppActions {
   ) => void;
   clearAllProjectPhaseModelOverrides: (projectId: string) => void;
 
+  // Project Default Feature Model Override
+  setProjectDefaultFeatureModel: (
+    projectId: string,
+    entry: import('@automaker/types').PhaseModelEntry | null // null = use global
+  ) => void;
+
   // Feature actions
   setFeatures: (features: Feature[]) => void;
   updateFeature: (id: string, updates: Partial<Feature>) => void;
@@ -1527,7 +1534,7 @@ const initialState: AppState = {
   specCreatingForProject: null,
   defaultPlanningMode: 'skip' as PlanningMode,
   defaultRequirePlanApproval: false,
-  defaultFeatureModel: { model: 'opus' } as PhaseModelEntry,
+  defaultFeatureModel: DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel,
   pendingPlanApproval: null,
   claudeRefreshInterval: 60,
   claudeUsage: null,
@@ -2105,9 +2112,11 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       return;
     }
 
-    // Clear overrides from project
+    // Clear all model overrides from project (phaseModelOverrides + defaultFeatureModel)
     const projects = get().projects.map((p) =>
-      p.id === projectId ? { ...p, phaseModelOverrides: undefined } : p
+      p.id === projectId
+        ? { ...p, phaseModelOverrides: undefined, defaultFeatureModel: undefined }
+        : p
     );
     set({ projects });
 
@@ -2118,6 +2127,49 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         currentProject: {
           ...currentProject,
           phaseModelOverrides: undefined,
+          defaultFeatureModel: undefined,
+        },
+      });
+    }
+
+    // Persist to server (clear both)
+    const httpClient = getHttpApiClient();
+    httpClient.settings
+      .updateProject(project.path, {
+        phaseModelOverrides: '__CLEAR__',
+        defaultFeatureModel: '__CLEAR__',
+      })
+      .catch((error) => {
+        console.error('Failed to clear model overrides:', error);
+      });
+  },
+
+  setProjectDefaultFeatureModel: (projectId, entry) => {
+    // Find the project to get its path for server sync
+    const project = get().projects.find((p) => p.id === projectId);
+    if (!project) {
+      console.error('Cannot set default feature model: project not found');
+      return;
+    }
+
+    // Update the project's defaultFeatureModel
+    const projects = get().projects.map((p) =>
+      p.id === projectId
+        ? {
+            ...p,
+            defaultFeatureModel: entry ?? undefined,
+          }
+        : p
+    );
+    set({ projects });
+
+    // Also update currentProject if it's the same project
+    const currentProject = get().currentProject;
+    if (currentProject?.id === projectId) {
+      set({
+        currentProject: {
+          ...currentProject,
+          defaultFeatureModel: entry ?? undefined,
         },
       });
     }
@@ -2126,10 +2178,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     const httpClient = getHttpApiClient();
     httpClient.settings
       .updateProject(project.path, {
-        phaseModelOverrides: '__CLEAR__',
+        defaultFeatureModel: entry ?? '__CLEAR__',
       })
       .catch((error) => {
-        console.error('Failed to clear phaseModelOverrides:', error);
+        console.error('Failed to persist defaultFeatureModel:', error);
       });
   },
 
@@ -2571,7 +2623,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     await syncSettingsToServer();
   },
   resetPhaseModels: async () => {
-    set({ phaseModels: DEFAULT_PHASE_MODELS });
+    set({
+      phaseModels: DEFAULT_PHASE_MODELS,
+      defaultFeatureModel: DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel,
+    });
     // Sync to server settings file
     const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
     await syncSettingsToServer();
