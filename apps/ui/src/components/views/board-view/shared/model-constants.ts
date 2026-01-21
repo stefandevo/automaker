@@ -133,7 +133,7 @@ export const GEMINI_MODELS: ModelOption[] = Object.entries(GEMINI_MODEL_MAP).map
     id, // IDs already have gemini- prefix (e.g., 'gemini-2.5-flash')
     label: config.label,
     description: config.description,
-    badge: config.supportsThinking ? 'Thinking' : undefined,
+    badge: config.supportsThinking ? 'Thinking' : 'Speed',
     provider: 'gemini' as ModelProvider,
     hasThinking: config.supportsThinking,
   })

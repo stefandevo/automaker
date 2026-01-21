@@ -81,8 +81,10 @@ export function getAllGeminiModelIds(): GeminiModelId[] {
 export const DEFAULT_GEMINI_MODEL: GeminiModelId = 'gemini-2.5-flash';
 
 /**
- * Thinking level configuration for Gemini CLI
- * Maps to --thinking-level flag
+ * Thinking level configuration for Gemini models
+ * Note: The Gemini CLI does not currently expose a --thinking-level flag.
+ * Thinking control (thinkingLevel/thinkingBudget) is available via the Gemini API.
+ * This type is defined for potential future CLI support or API-level configuration.
  */
 export type GeminiThinkingLevel = 'off' | 'low' | 'medium' | 'high';
 

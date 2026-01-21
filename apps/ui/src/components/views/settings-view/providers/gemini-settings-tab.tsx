@@ -37,7 +37,10 @@ export function GeminiSettingsTab() {
       version: cliStatusData.version,
       path: cliStatusData.path,
       recommendation: cliStatusData.recommendation,
-      installCommands: cliStatusData.installCommands,
+      // Server sends installCommand (singular), transform to expected format
+      installCommands: cliStatusData.installCommand
+        ? { npm: cliStatusData.installCommand }
+        : cliStatusData.installCommands,
     };
   }, [cliStatusData]);
 

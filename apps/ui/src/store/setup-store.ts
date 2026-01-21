@@ -72,6 +72,7 @@ export interface GeminiCliStatus {
     authenticated: boolean;
     method: string;
     hasApiKey?: boolean;
+    hasEnvApiKey?: boolean;
   };
   installCommand?: string;
   loginCommand?: string;
