@@ -21,6 +21,7 @@ import type {
   CursorModelId,
   CodexModelId,
   OpencodeModelId,
+  GeminiModelId,
   PhaseModelConfig,
   PhaseModelKey,
   PhaseModelEntry,
@@ -39,8 +40,10 @@ import {
   getAllCursorModelIds,
   getAllCodexModelIds,
   getAllOpencodeModelIds,
+  getAllGeminiModelIds,
   DEFAULT_PHASE_MODELS,
   DEFAULT_OPENCODE_MODEL,
+  DEFAULT_GEMINI_MODEL,
   DEFAULT_MAX_CONCURRENCY,
   DEFAULT_GLOBAL_SETTINGS,
 } from '@automaker/types';
@@ -727,6 +730,10 @@ export interface AppState {
   opencodeModelsLastFetched: number | null; // Timestamp of last successful fetch
   opencodeModelsLastFailedAt: number | null; // Timestamp of last failed fetch
 
+  // Gemini CLI Settings (global)
+  enabledGeminiModels: GeminiModelId[]; // Which Gemini models are available in feature modal
+  geminiDefaultModel: GeminiModelId; // Default Gemini model selection
+
   // Provider Visibility Settings
   disabledProviders: ModelProvider[]; // Providers that are disabled and hidden from dropdowns
 
@@ -1216,6 +1223,11 @@ export interface AppActions {
     providers: Array<{ id: string; name: string; authenticated: boolean; authMethod?: string }>
   ) => void;
 
+  // Gemini CLI Settings actions
+  setEnabledGeminiModels: (models: GeminiModelId[]) => void;
+  setGeminiDefaultModel: (model: GeminiModelId) => void;
+  toggleGeminiModel: (model: GeminiModelId, enabled: boolean) => void;
+
   // Provider Visibility Settings actions
   setDisabledProviders: (providers: ModelProvider[]) => void;
   toggleProviderDisabled: (provider: ModelProvider, disabled: boolean) => void;
@@ -1501,6 +1513,8 @@ const initialState: AppState = {
   opencodeModelsError: null,
   opencodeModelsLastFetched: null,
   opencodeModelsLastFailedAt: null,
+  enabledGeminiModels: getAllGeminiModelIds(), // All Gemini models enabled by default
+  geminiDefaultModel: DEFAULT_GEMINI_MODEL, // Default to Gemini 2.5 Flash
   disabledProviders: [], // No providers disabled by default
   autoLoadClaudeMd: false, // Default to disabled (user must opt-in)
   skipSandboxWarning: false, // Default to disabled (show sandbox warning dialog)
@@ -2732,6 +2746,16 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         (provider) => provider.id !== OPENCODE_BEDROCK_PROVIDER_ID
       ),
     }),
+
+  // Gemini CLI Settings actions
+  setEnabledGeminiModels: (models) => set({ enabledGeminiModels: models }),
+  setGeminiDefaultModel: (model) => set({ geminiDefaultModel: model }),
+  toggleGeminiModel: (model, enabled) =>
+    set((state) => ({
+      enabledGeminiModels: enabled
+        ? [...state.enabledGeminiModels, model]
+        : state.enabledGeminiModels.filter((m) => m !== model),
+    })),
 
   // Provider Visibility Settings actions
   setDisabledProviders: (providers) => set({ disabledProviders: providers }),

@@ -1,15 +1,22 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useAppStore } from '@/store/app-store';
 import { GeminiCliStatus, GeminiCliStatusSkeleton } from '../cli-status/gemini-cli-status';
+import { GeminiModelConfiguration } from './gemini-model-configuration';
 import { ProviderToggle } from './provider-toggle';
 import { useGeminiCliStatus } from '@/hooks/queries';
 import { queryKeys } from '@/lib/query-keys';
 import type { CliStatus as SharedCliStatus } from '../shared/types';
 import type { GeminiAuthStatus } from '../cli-status/gemini-cli-status';
+import type { GeminiModelId } from '@automaker/types';
 
 export function GeminiSettingsTab() {
   const queryClient = useQueryClient();
+  const { enabledGeminiModels, geminiDefaultModel, setGeminiDefaultModel, toggleGeminiModel } =
+    useAppStore();
+
+  const [isSaving, setIsSaving] = useState(false);
 
   // React Query hooks for data fetching
   const {
@@ -17,6 +24,8 @@ export function GeminiSettingsTab() {
     isLoading: isCheckingGeminiCli,
     refetch: refetchCliStatus,
   } = useGeminiCliStatus();
+
+  const isCliInstalled = cliStatusData?.installed ?? false;
 
   // Transform CLI status to the expected format
   const cliStatus = useMemo((): SharedCliStatus | null => {
@@ -51,6 +60,35 @@ export function GeminiSettingsTab() {
     toast.success('Gemini CLI refreshed');
   }, [queryClient, refetchCliStatus]);
 
+  const handleDefaultModelChange = useCallback(
+    (model: GeminiModelId) => {
+      setIsSaving(true);
+      try {
+        setGeminiDefaultModel(model);
+        toast.success('Default model updated');
+      } catch {
+        toast.error('Failed to update default model');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [setGeminiDefaultModel]
+  );
+
+  const handleModelToggle = useCallback(
+    (model: GeminiModelId, enabled: boolean) => {
+      setIsSaving(true);
+      try {
+        toggleGeminiModel(model, enabled);
+      } catch {
+        toast.error('Failed to update models');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [toggleGeminiModel]
+  );
+
   // Show skeleton only while checking CLI status initially
   if (!cliStatus && isCheckingGeminiCli) {
     return (
@@ -71,6 +109,17 @@ export function GeminiSettingsTab() {
         isChecking={isCheckingGeminiCli}
         onRefresh={handleRefreshGeminiCli}
       />
+
+      {/* Model Configuration - Only show when CLI is installed */}
+      {isCliInstalled && (
+        <GeminiModelConfiguration
+          enabledGeminiModels={enabledGeminiModels}
+          geminiDefaultModel={geminiDefaultModel}
+          isSaving={isSaving}
+          onDefaultModelChange={handleDefaultModelChange}
+          onModelToggle={handleModelToggle}
+        />
+      )}
     </div>
   );
 }
