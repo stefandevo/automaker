@@ -2930,6 +2930,23 @@ Format your response as a structured markdown document.`;
         feature.justFinishedAt = undefined;
       }
 
+      // Extract and update summary from agent-output.md when agent completes
+      // This ensures the summary is persisted even after refinements
+      if (status === 'waiting_approval' || status === 'verified') {
+        try {
+          const agentOutputPath = path.join(featureDir, 'agent-output.md');
+          const agentOutput = (await secureFs.readFile(agentOutputPath, 'utf-8')) as string;
+          const extractedSummary = this.extractSummaryFromContent(agentOutput);
+          if (extractedSummary) {
+            feature.summary = extractedSummary;
+            logger.info(`Extracted and saved summary for feature ${featureId}`);
+          }
+        } catch (readError) {
+          // Log but don't fail if we can't read the agent output
+          logger.debug(`Could not read agent-output.md for summary extraction: ${readError}`);
+        }
+      }
+
       // Use atomic write with backup support
       await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
 
@@ -2965,6 +2982,60 @@ Format your response as a structured markdown document.`;
     } catch (error) {
       logger.error(`Failed to update feature status for ${featureId}:`, error);
     }
+  }
+
+  /**
+   * Extracts a summary from agent output content
+   * Looks for content between <summary> and </summary> tags, or ## Summary sections
+   * For follow-up sessions, we want the LAST summary (most recent), not the first
+   */
+  private extractSummaryFromContent(content: string): string | undefined {
+    // Clean up any fragmented text from streaming (e.g., "<sum\n\nmary>" -> "<summary>")
+    // Also clean newlines between letters (e.g., "sum\n\nmary" -> "summary")
+    let cleanedContent = content.replace(/([a-zA-Z])\n+([a-zA-Z])/g, '$1$2');
+    cleanedContent = cleanedContent.replace(/<([a-zA-Z]+)\n*([a-zA-Z]*)\n*>/g, '<$1$2>');
+    cleanedContent = cleanedContent.replace(/<\/([a-zA-Z]+)\n*([a-zA-Z]*)\n*>/g, '</$1$2>');
+
+    // Look for <summary> tags - get the LAST match for follow-up sessions
+    const summaryTagMatches = [...cleanedContent.matchAll(/<summary>([\s\S]*?)<\/summary>/gi)];
+    if (summaryTagMatches.length > 0) {
+      const lastMatch = summaryTagMatches[summaryTagMatches.length - 1];
+      return lastMatch[1].trim();
+    }
+
+    // Fallback: Look for summary sections - get the LAST match
+    // Stop at same-level ## sections (but not ###), or tool markers, or end
+    const summaryMatches = [
+      ...cleanedContent.matchAll(/## Summary[^\n]*\n([\s\S]*?)(?=\n## [^#]|\n🔧|$)/gi),
+    ];
+    if (summaryMatches.length > 0) {
+      const lastMatch = summaryMatches[summaryMatches.length - 1];
+      return lastMatch[1].trim();
+    }
+
+    // Look for completion markers and extract surrounding text - get the LAST match
+    const completionMatches = [
+      ...cleanedContent.matchAll(
+        /✓ (?:Feature|Verification|Task) (?:successfully|completed|verified)[^\n]*(?:\n[^\n]{1,200})?/gi
+      ),
+    ];
+    if (completionMatches.length > 0) {
+      const lastMatch = completionMatches[completionMatches.length - 1];
+      return lastMatch[0].trim();
+    }
+
+    // Look for "What was done" type sections - get the LAST match
+    const whatWasDoneMatches = [
+      ...cleanedContent.matchAll(
+        /(?:What was done|Changes made|Implemented)[^\n]*\n([\s\S]*?)(?=\n## [^#]|\n🔧|$)/gi
+      ),
+    ];
+    if (whatWasDoneMatches.length > 0) {
+      const lastMatch = whatWasDoneMatches[whatWasDoneMatches.length - 1];
+      return lastMatch[1].trim();
+    }
+
+    return undefined;
   }
 
   private isFeatureFinished(feature: Feature): boolean {
