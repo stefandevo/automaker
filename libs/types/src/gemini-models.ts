@@ -19,6 +19,9 @@ export interface GeminiModelConfig {
 /**
  * Available Gemini models via the Gemini CLI
  * Models from Gemini 2.5 and 3.0 series
+ *
+ * Model IDs use 'gemini-' prefix for consistent provider routing (like Cursor).
+ * When passed to the CLI, the prefix is part of the actual model name.
  */
 export const GEMINI_MODEL_MAP = {
   // Gemini 3 Series (latest)
@@ -90,5 +93,7 @@ export interface GeminiAuthStatus {
   authenticated: boolean;
   method: 'google_login' | 'api_key' | 'vertex_ai' | 'none';
   hasApiKey?: boolean;
+  hasEnvApiKey?: boolean;
   hasCredentialsFile?: boolean;
+  error?: string;
 }

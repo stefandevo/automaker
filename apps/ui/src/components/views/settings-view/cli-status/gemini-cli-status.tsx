@@ -7,10 +7,9 @@ import type { CliStatus } from '../shared/types';
 import { GeminiIcon } from '@/components/ui/provider-icon';
 
 export type GeminiAuthMethod =
-  | 'api_key_env' // GEMINI_API_KEY environment variable
-  | 'api_key' // Manually stored API key
-  | 'oauth' // Google OAuth authentication
-  | 'vertex' // Vertex AI authentication
+  | 'api_key' // API key authentication
+  | 'google_login' // Google OAuth authentication
+  | 'vertex_ai' // Vertex AI authentication
   | 'none';
 
 export interface GeminiAuthStatus {
@@ -18,7 +17,7 @@ export interface GeminiAuthStatus {
   method: GeminiAuthMethod;
   hasApiKey?: boolean;
   hasEnvApiKey?: boolean;
-  hasOAuthToken?: boolean;
+  hasCredentialsFile?: boolean;
   error?: string;
 }
 
@@ -26,11 +25,9 @@ function getAuthMethodLabel(method: GeminiAuthMethod): string {
   switch (method) {
     case 'api_key':
       return 'API Key';
-    case 'api_key_env':
-      return 'API Key (Environment)';
-    case 'oauth':
+    case 'google_login':
       return 'Google OAuth';
-    case 'vertex':
+    case 'vertex_ai':
       return 'Vertex AI';
     default:
       return method || 'Unknown';
@@ -182,17 +179,19 @@ export function GeminiCliStatus({
                 </div>
               </div>
             ) : (
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center border border-amber-500/20 shrink-0 mt-0.5">
-                  <Key className="w-5 h-5 text-amber-500" />
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center border border-red-500/20 shrink-0 mt-0.5">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-400">Authentication Required</p>
-                  <p className="text-xs text-amber-400/70 mt-1">
-                    Run{' '}
-                    <code className="font-mono bg-amber-500/10 px-1 rounded">gemini auth login</code>{' '}
-                    in your terminal to authenticate with Google, or set the{' '}
-                    <code className="font-mono bg-amber-500/10 px-1 rounded">GEMINI_API_KEY</code>{' '}
+                  <p className="text-sm font-medium text-red-400">Authentication Failed</p>
+                  {authStatus?.error && (
+                    <p className="text-xs text-red-400/70 mt-1">{authStatus.error}</p>
+                  )}
+                  <p className="text-xs text-red-400/70 mt-2">
+                    Run <code className="font-mono bg-red-500/10 px-1 rounded">gemini</code>{' '}
+                    interactively in your terminal to log in with Google, or set the{' '}
+                    <code className="font-mono bg-red-500/10 px-1 rounded">GEMINI_API_KEY</code>{' '}
                     environment variable.
                   </p>
                 </div>

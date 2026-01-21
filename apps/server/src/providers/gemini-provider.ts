@@ -13,11 +13,7 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  CliProvider,
-  type CliSpawnConfig,
-  type CliErrorInfo,
-} from './cli-provider.js';
+import { CliProvider, type CliSpawnConfig, type CliErrorInfo } from './cli-provider.js';
 import type {
   ProviderConfig,
   ExecuteOptions,
@@ -40,47 +36,65 @@ const logger = createLogger('GeminiProvider');
 
 /**
  * Base event structure from Gemini CLI --output-format stream-json
+ *
+ * Actual CLI output format:
+ * {"type":"init","timestamp":"...","session_id":"...","model":"..."}
+ * {"type":"message","timestamp":"...","role":"user","content":"..."}
+ * {"type":"message","timestamp":"...","role":"assistant","content":"...","delta":true}
+ * {"type":"tool_use","timestamp":"...","tool_use_id":"...","name":"...","input":{...}}
+ * {"type":"tool_result","timestamp":"...","tool_use_id":"...","content":"..."}
+ * {"type":"result","timestamp":"...","status":"success","stats":{...}}
  */
 interface GeminiStreamEvent {
-  type: 'system' | 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'result' | 'error';
-  subtype?: string;
+  type: 'init' | 'message' | 'tool_use' | 'tool_result' | 'result' | 'error';
+  timestamp?: string;
   session_id?: string;
 }
 
-interface GeminiSystemEvent extends GeminiStreamEvent {
-  type: 'system';
-  subtype: 'init' | 'config';
+interface GeminiInitEvent extends GeminiStreamEvent {
+  type: 'init';
   session_id: string;
+  model: string;
 }
 
-interface GeminiAssistantEvent extends GeminiStreamEvent {
-  type: 'assistant';
-  message: {
-    content: Array<{ type: 'text'; text: string } | { type: 'thinking'; thinking: string }>;
-  };
-  session_id: string;
+interface GeminiMessageEvent extends GeminiStreamEvent {
+  type: 'message';
+  role: 'user' | 'assistant';
+  content: string;
+  delta?: boolean;
+  session_id?: string;
 }
 
-interface GeminiToolCallEvent extends GeminiStreamEvent {
-  type: 'tool_call';
-  subtype: 'started' | 'completed';
-  call_id: string;
-  session_id: string;
-  tool_call: {
-    function?: {
-      name: string;
-      arguments: string;
-    };
-    result?: unknown;
-  };
+interface GeminiToolUseEvent extends GeminiStreamEvent {
+  type: 'tool_use';
+  tool_id: string;
+  tool_name: string;
+  parameters: Record<string, unknown>;
+  session_id?: string;
+}
+
+interface GeminiToolResultEvent extends GeminiStreamEvent {
+  type: 'tool_result';
+  tool_id: string;
+  status: 'success' | 'error';
+  output: string;
+  session_id?: string;
 }
 
 interface GeminiResultEvent extends GeminiStreamEvent {
   type: 'result';
-  is_error?: boolean;
-  result?: string;
+  status: 'success' | 'error';
+  stats?: {
+    total_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    cached?: number;
+    input?: number;
+    duration_ms?: number;
+    tool_calls?: number;
+  };
   error?: string;
-  session_id: string;
+  session_id?: string;
 }
 
 // =============================================================================
@@ -174,52 +188,38 @@ export class GeminiProvider extends CliProvider {
   }
 
   buildCliArgs(options: ExecuteOptions): string[] {
-    const model = options.model || 'gemini-2.5-flash';
+    // Model comes in stripped of provider prefix (e.g., '2.5-flash' from 'gemini-2.5-flash')
+    // We need to add 'gemini-' back since it's part of the actual CLI model name
+    const bareModel = options.model || '2.5-flash';
     const cliArgs: string[] = [];
 
-    // Non-interactive mode with prompt flag
-    cliArgs.push('-p');
-
-    // Streaming JSON output format
+    // Streaming JSON output format for real-time updates
     cliArgs.push('--output-format', 'stream-json');
 
-    // Model selection (if not default)
-    if (model && model !== 'auto') {
-      cliArgs.push('--model', model);
+    // Model selection - Gemini CLI expects full model names like "gemini-2.5-flash"
+    // Unlike Cursor CLI where 'cursor-' is just a routing prefix, for Gemini CLI
+    // the 'gemini-' is part of the actual model name Google expects
+    if (bareModel && bareModel !== 'auto') {
+      // Add gemini- prefix if not already present (handles edge cases)
+      const cliModel = bareModel.startsWith('gemini-') ? bareModel : `gemini-${bareModel}`;
+      cliArgs.push('--model', cliModel);
     }
 
-    // Thinking level configuration (maps to Gemini's thinking budget)
-    if (options.thinkingLevel && options.thinkingLevel !== 'none') {
-      // Map our thinking levels to Gemini's
-      const geminiThinking = this.mapThinkingLevel(options.thinkingLevel);
-      if (geminiThinking !== 'off') {
-        cliArgs.push('--thinking-level', geminiThinking.toUpperCase());
-      }
-    }
+    // Disable sandbox mode for faster execution (sandbox adds overhead)
+    cliArgs.push('--sandbox', 'false');
 
-    // Use '-' to read prompt from stdin
-    cliArgs.push('-');
+    // YOLO mode for automatic approval (required for non-interactive use)
+    // Use explicit approval-mode for clearer semantics
+    cliArgs.push('--approval-mode', 'yolo');
+
+    // Note: Gemini CLI doesn't have a --thinking-level flag.
+    // Thinking capabilities are determined by the model selection (e.g., gemini-2.5-pro).
+    // The model handles thinking internally based on the task complexity.
+
+    // The prompt will be passed as the last positional argument
+    // We'll append it in executeQuery after extracting the text
 
     return cliArgs;
-  }
-
-  /**
-   * Map AutoMaker thinking levels to Gemini thinking levels
-   */
-  private mapThinkingLevel(level: string): 'off' | 'low' | 'medium' | 'high' {
-    switch (level) {
-      case 'none':
-        return 'off';
-      case 'low':
-        return 'low';
-      case 'medium':
-        return 'medium';
-      case 'high':
-      case 'ultrathink':
-        return 'high';
-      default:
-        return 'off';
-    }
   }
 
   /**
@@ -229,111 +229,99 @@ export class GeminiProvider extends CliProvider {
     const geminiEvent = event as GeminiStreamEvent;
 
     switch (geminiEvent.type) {
-      case 'system':
-        // System init - capture session but don't yield
+      case 'init': {
+        // Init event - capture session but don't yield a message
+        const initEvent = geminiEvent as GeminiInitEvent;
+        logger.debug(
+          `Gemini init event: session=${initEvent.session_id}, model=${initEvent.model}`
+        );
         return null;
+      }
 
-      case 'user':
-        // User message - already handled by caller
-        return null;
+      case 'message': {
+        const messageEvent = geminiEvent as GeminiMessageEvent;
 
-      case 'assistant': {
-        const assistantEvent = geminiEvent as GeminiAssistantEvent;
-        const contentBlocks: ContentBlock[] = [];
-
-        for (const c of assistantEvent.message.content) {
-          if (c.type === 'text' && 'text' in c) {
-            contentBlocks.push({ type: 'text', text: c.text });
-          } else if (c.type === 'thinking' && 'thinking' in c) {
-            contentBlocks.push({ type: 'thinking', thinking: c.thinking });
-          }
+        // Skip user messages - already handled by caller
+        if (messageEvent.role === 'user') {
+          return null;
         }
 
+        // Handle assistant messages
+        if (messageEvent.role === 'assistant') {
+          return {
+            type: 'assistant',
+            session_id: messageEvent.session_id,
+            message: {
+              role: 'assistant',
+              content: [{ type: 'text', text: messageEvent.content }],
+            },
+          };
+        }
+
+        return null;
+      }
+
+      case 'tool_use': {
+        const toolEvent = geminiEvent as GeminiToolUseEvent;
         return {
           type: 'assistant',
-          session_id: assistantEvent.session_id,
+          session_id: toolEvent.session_id,
           message: {
             role: 'assistant',
-            content: contentBlocks,
+            content: [
+              {
+                type: 'tool_use',
+                name: toolEvent.tool_name,
+                tool_use_id: toolEvent.tool_id,
+                input: toolEvent.parameters,
+              },
+            ],
           },
         };
       }
 
-      case 'tool_call': {
-        const toolEvent = geminiEvent as GeminiToolCallEvent;
-        const toolCall = toolEvent.tool_call;
-
-        if (!toolCall.function) {
-          return null;
-        }
-
-        let toolInput: unknown;
-        try {
-          toolInput = JSON.parse(toolCall.function.arguments || '{}');
-        } catch {
-          toolInput = { raw: toolCall.function.arguments };
-        }
-
-        if (toolEvent.subtype === 'started') {
-          return {
-            type: 'assistant',
-            session_id: toolEvent.session_id,
-            message: {
-              role: 'assistant',
-              content: [
-                {
-                  type: 'tool_use',
-                  name: toolCall.function.name,
-                  tool_use_id: toolEvent.call_id,
-                  input: toolInput,
-                },
-              ],
-            },
-          };
-        }
-
-        if (toolEvent.subtype === 'completed') {
-          return {
-            type: 'assistant',
-            session_id: toolEvent.session_id,
-            message: {
-              role: 'assistant',
-              content: [
-                {
-                  type: 'tool_use',
-                  name: toolCall.function.name,
-                  tool_use_id: toolEvent.call_id,
-                  input: toolInput,
-                },
-                {
-                  type: 'tool_result',
-                  tool_use_id: toolEvent.call_id,
-                  content: typeof toolCall.result === 'string' ? toolCall.result : JSON.stringify(toolCall.result),
-                },
-              ],
-            },
-          };
-        }
-
-        return null;
+      case 'tool_result': {
+        const toolResultEvent = geminiEvent as GeminiToolResultEvent;
+        // If tool result is an error, prefix with error indicator
+        const content =
+          toolResultEvent.status === 'error'
+            ? `[ERROR] ${toolResultEvent.output}`
+            : toolResultEvent.output;
+        return {
+          type: 'assistant',
+          session_id: toolResultEvent.session_id,
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: toolResultEvent.tool_id,
+                content,
+              },
+            ],
+          },
+        };
       }
 
       case 'result': {
         const resultEvent = geminiEvent as GeminiResultEvent;
 
-        if (resultEvent.is_error) {
+        if (resultEvent.status === 'error') {
           return {
             type: 'error',
             session_id: resultEvent.session_id,
-            error: resultEvent.error || resultEvent.result || 'Unknown error',
+            error: resultEvent.error || 'Unknown error',
           };
         }
 
+        // Success result - include stats for logging
+        logger.debug(
+          `Gemini result: status=${resultEvent.status}, tokens=${resultEvent.stats?.total_tokens}`
+        );
         return {
           type: 'result',
           subtype: 'success',
           session_id: resultEvent.session_id,
-          result: resultEvent.result,
         };
       }
 
@@ -347,6 +335,7 @@ export class GeminiProvider extends CliProvider {
       }
 
       default:
+        logger.debug(`Unknown Gemini event type: ${geminiEvent.type}`);
         return null;
     }
   }
@@ -365,13 +354,17 @@ export class GeminiProvider extends CliProvider {
       lower.includes('not authenticated') ||
       lower.includes('please log in') ||
       lower.includes('unauthorized') ||
-      lower.includes('login required')
+      lower.includes('login required') ||
+      lower.includes('error authenticating') ||
+      lower.includes('loadcodeassist') ||
+      (lower.includes('econnrefused') && lower.includes('8888'))
     ) {
       return {
         code: GeminiErrorCode.NOT_AUTHENTICATED,
         message: 'Gemini CLI is not authenticated',
         recoverable: true,
-        suggestion: 'Run "gemini" and choose a login method, or set GEMINI_API_KEY',
+        suggestion:
+          'Run "gemini" interactively to log in, or set GEMINI_API_KEY environment variable',
       };
     }
 
@@ -392,7 +385,10 @@ export class GeminiProvider extends CliProvider {
     if (
       lower.includes('model not available') ||
       lower.includes('invalid model') ||
-      lower.includes('unknown model')
+      lower.includes('unknown model') ||
+      lower.includes('modelnotfounderror') ||
+      lower.includes('model not found') ||
+      (lower.includes('not found') && lower.includes('404'))
     ) {
       return {
         code: GeminiErrorCode.MODEL_UNAVAILABLE,
@@ -457,14 +453,14 @@ export class GeminiProvider extends CliProvider {
       );
     }
 
-    // Extract prompt text to pass via stdin
+    // Extract prompt text to pass as positional argument
     const promptText = this.extractPromptText(options);
 
+    // Build CLI args and append the prompt as the last positional argument
     const cliArgs = this.buildCliArgs(options);
-    const subprocessOptions = this.buildSubprocessOptions(options, cliArgs);
+    cliArgs.push(promptText); // Gemini CLI uses positional args for the prompt
 
-    // Pass prompt via stdin
-    subprocessOptions.stdinData = promptText;
+    const subprocessOptions = this.buildSubprocessOptions(options, cliArgs);
 
     let sessionId: string | undefined;
 
@@ -474,10 +470,11 @@ export class GeminiProvider extends CliProvider {
       for await (const rawEvent of spawnJSONLProcess(subprocessOptions)) {
         const event = rawEvent as GeminiStreamEvent;
 
-        // Capture session ID from system init
-        if (event.type === 'system' && (event as GeminiSystemEvent).subtype === 'init') {
-          sessionId = event.session_id;
-          logger.debug(`Session started: ${sessionId}`);
+        // Capture session ID from init event
+        if (event.type === 'init') {
+          const initEvent = event as GeminiInitEvent;
+          sessionId = initEvent.session_id;
+          logger.debug(`Session started: ${sessionId}, model: ${initEvent.model}`);
         }
 
         // Normalize and yield the event
@@ -554,65 +551,145 @@ export class GeminiProvider extends CliProvider {
 
   /**
    * Check authentication status
+   *
+   * Uses a fast credential check approach:
+   * 1. Check for GEMINI_API_KEY environment variable
+   * 2. Check for Google Cloud credentials
+   * 3. Check for Gemini settings file with stored credentials
+   * 4. Quick CLI auth test with --help (fast, doesn't make API calls)
    */
   async checkAuth(): Promise<GeminiAuthStatus> {
     this.ensureCliDetected();
     if (!this.cliPath) {
+      logger.debug('checkAuth: CLI not found');
       return { authenticated: false, method: 'none' };
     }
 
-    // Check for API key in environment
-    if (process.env.GEMINI_API_KEY) {
-      return { authenticated: true, method: 'api_key', hasApiKey: true };
-    }
+    logger.debug('checkAuth: Starting credential check');
 
-    // Check for Google Cloud credentials (Vertex AI)
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT) {
-      return { authenticated: true, method: 'vertex_ai' };
-    }
+    // Determine the likely auth method based on environment
+    const hasApiKey = !!process.env.GEMINI_API_KEY;
+    const hasEnvApiKey = hasApiKey;
+    const hasVertexAi = !!(
+      process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT
+    );
+
+    logger.debug(`checkAuth: hasApiKey=${hasApiKey}, hasVertexAi=${hasVertexAi}`);
 
     // Check for Gemini credentials file (~/.gemini/settings.json)
     const geminiConfigDir = path.join(os.homedir(), '.gemini');
     const settingsPath = path.join(geminiConfigDir, 'settings.json');
+    let hasCredentialsFile = false;
+    let authType: string | null = null;
 
     if (fs.existsSync(settingsPath)) {
+      logger.debug(`checkAuth: Found settings file at ${settingsPath}`);
       try {
         const content = fs.readFileSync(settingsPath, 'utf8');
         const settings = JSON.parse(content);
-        // Check if there's auth configuration
-        if (settings.auth || settings.credentials || settings.apiKey) {
-          return {
-            authenticated: true,
-            method: 'google_login',
-            hasCredentialsFile: true,
-          };
+
+        // Auth config is at security.auth.selectedType (e.g., "oauth-personal", "oauth-adc", "api-key")
+        const selectedType = settings?.security?.auth?.selectedType;
+        if (selectedType) {
+          hasCredentialsFile = true;
+          authType = selectedType;
+          logger.debug(`checkAuth: Settings file has auth config, selectedType=${selectedType}`);
+        } else {
+          logger.debug(`checkAuth: Settings file found but no auth type configured`);
         }
-      } catch {
-        // Invalid settings file
+      } catch (e) {
+        logger.debug(`checkAuth: Failed to parse settings file: ${e}`);
       }
+    } else {
+      logger.debug('checkAuth: No settings file found');
     }
 
-    // Try running the CLI to check if authenticated
-    try {
-      // A simple query to check auth - this will fail if not authenticated
-      execSync(`"${this.cliPath}" --version`, {
-        encoding: 'utf8',
-        timeout: 10000,
-        env: { ...process.env },
-      });
-      // If version works, assume some form of auth is configured
-      return { authenticated: true, method: 'google_login' };
-    } catch (error: unknown) {
-      const execError = error as { stderr?: string };
-      if (
-        execError.stderr?.includes('not authenticated') ||
-        execError.stderr?.includes('login')
-      ) {
-        return { authenticated: false, method: 'none' };
-      }
+    // If we have an API key, we're authenticated
+    if (hasApiKey) {
+      logger.debug('checkAuth: Using API key authentication');
+      return {
+        authenticated: true,
+        method: 'api_key',
+        hasApiKey,
+        hasEnvApiKey,
+        hasCredentialsFile,
+      };
     }
 
-    return { authenticated: false, method: 'none' };
+    // If we have Vertex AI credentials, we're authenticated
+    if (hasVertexAi) {
+      logger.debug('checkAuth: Using Vertex AI authentication');
+      return {
+        authenticated: true,
+        method: 'vertex_ai',
+        hasApiKey,
+        hasEnvApiKey,
+        hasCredentialsFile,
+      };
+    }
+
+    // Check if settings file indicates configured authentication
+    if (hasCredentialsFile && authType) {
+      // OAuth types: "oauth-personal", "oauth-adc"
+      // API key type: "api-key"
+      // Code assist: "code-assist" (requires IDE integration)
+      if (authType.startsWith('oauth')) {
+        logger.debug(`checkAuth: OAuth authentication configured (${authType})`);
+        return {
+          authenticated: true,
+          method: 'google_login',
+          hasApiKey,
+          hasEnvApiKey,
+          hasCredentialsFile,
+        };
+      }
+
+      if (authType === 'api-key') {
+        logger.debug('checkAuth: API key authentication configured in settings');
+        return {
+          authenticated: true,
+          method: 'api_key',
+          hasApiKey,
+          hasEnvApiKey,
+          hasCredentialsFile,
+        };
+      }
+
+      if (authType === 'code-assist' || authType === 'codeassist') {
+        logger.debug('checkAuth: Code Assist auth configured but requires local server');
+        return {
+          authenticated: false,
+          method: 'google_login',
+          hasApiKey,
+          hasEnvApiKey,
+          hasCredentialsFile,
+          error:
+            'Code Assist authentication requires IDE integration. Please use "gemini" CLI to log in with a different method, or set GEMINI_API_KEY.',
+        };
+      }
+
+      // Unknown auth type but something is configured
+      logger.debug(`checkAuth: Unknown auth type configured: ${authType}`);
+      return {
+        authenticated: true,
+        method: 'google_login',
+        hasApiKey,
+        hasEnvApiKey,
+        hasCredentialsFile,
+      };
+    }
+
+    // No credentials found
+    logger.debug('checkAuth: No valid credentials found');
+    return {
+      authenticated: false,
+      method: 'none',
+      hasApiKey,
+      hasEnvApiKey,
+      hasCredentialsFile,
+      error:
+        'No authentication configured. Run "gemini" interactively to log in, or set GEMINI_API_KEY.',
+    };
   }
 
   /**
@@ -646,9 +723,9 @@ export class GeminiProvider extends CliProvider {
    */
   getAvailableModels(): ModelDefinition[] {
     return Object.entries(GEMINI_MODEL_MAP).map(([id, config]) => ({
-      id: `gemini-${id}`,
+      id, // Full model ID with gemini- prefix (e.g., 'gemini-2.5-flash')
       name: config.label,
-      modelString: id,
+      modelString: id, // Same as id - CLI uses the full model name
       provider: 'gemini',
       description: config.description,
       supportsTools: true,

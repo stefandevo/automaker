@@ -95,18 +95,18 @@ export function isCodexModel(model: string | undefined | null): boolean {
 /**
  * Check if a model string represents a Gemini model
  *
- * @param model - Model string to check (e.g., "gemini-gemini-2.5-pro", "gemini-3-pro-preview")
+ * @param model - Model string to check (e.g., "gemini-2.5-pro", "gemini-3-pro-preview")
  * @returns true if the model is a Gemini model
  */
 export function isGeminiModel(model: string | undefined | null): boolean {
   if (!model || typeof model !== 'string') return false;
 
-  // Canonical format: gemini- prefix
+  // Canonical format: gemini- prefix (e.g., "gemini-2.5-flash")
   if (model.startsWith(PROVIDER_PREFIXES.gemini)) {
     return true;
   }
 
-  // Check if it's a known Gemini model ID without prefix
+  // Check if it's a known Gemini model ID (map keys include gemini- prefix)
   if (model in GEMINI_MODEL_MAP) {
     return true;
   }
@@ -227,6 +227,7 @@ export function stripProviderPrefix(model: string): string {
  * addProviderPrefix('cursor-composer-1', 'cursor') // 'cursor-composer-1' (no change)
  * addProviderPrefix('gpt-5.2', 'codex') // 'codex-gpt-5.2'
  * addProviderPrefix('sonnet', 'claude') // 'sonnet' (Claude doesn't use prefix)
+ * addProviderPrefix('2.5-flash', 'gemini') // 'gemini-2.5-flash'
  */
 export function addProviderPrefix(model: string, provider: ModelProvider): string {
   if (!model || typeof model !== 'string') return model;

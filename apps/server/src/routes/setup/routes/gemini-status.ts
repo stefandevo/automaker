@@ -61,6 +61,8 @@ export function createGeminiStatusHandler() {
           authenticated: auth.authenticated,
           method: auth.method,
           hasApiKey: auth.hasApiKey || false,
+          hasEnvApiKey: auth.hasEnvApiKey || false,
+          error: auth.error,
         },
         installCommand,
         loginCommand,

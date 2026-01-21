@@ -126,10 +126,11 @@ export const OPENCODE_MODELS: ModelOption[] = OPENCODE_MODEL_CONFIGS.map((config
 
 /**
  * Gemini models derived from GEMINI_MODEL_MAP
+ * Model IDs already have 'gemini-' prefix (like Cursor models)
  */
 export const GEMINI_MODELS: ModelOption[] = Object.entries(GEMINI_MODEL_MAP).map(
   ([id, config]) => ({
-    id, // Model IDs already have gemini- prefix
+    id, // IDs already have gemini- prefix (e.g., 'gemini-2.5-flash')
     label: config.label,
     description: config.description,
     badge: config.supportsThinking ? 'Thinking' : undefined,
