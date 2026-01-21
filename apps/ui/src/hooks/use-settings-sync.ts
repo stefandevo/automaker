@@ -21,15 +21,20 @@ import { useAuthStore } from '@/store/auth-store';
 import { waitForMigrationComplete, resetMigrationState } from './use-settings-migration';
 import {
   DEFAULT_OPENCODE_MODEL,
+  DEFAULT_GEMINI_MODEL,
   DEFAULT_MAX_CONCURRENCY,
   getAllOpencodeModelIds,
   getAllCursorModelIds,
+  getAllCodexModelIds,
+  getAllGeminiModelIds,
   migrateCursorModelIds,
   migrateOpencodeModelIds,
   migratePhaseModelEntry,
   type GlobalSettings,
   type CursorModelId,
   type OpencodeModelId,
+  type CodexModelId,
+  type GeminiModelId,
 } from '@automaker/types';
 
 const logger = createLogger('SettingsSync');
@@ -571,6 +576,37 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
       sanitizedEnabledOpencodeModels.push(sanitizedOpencodeDefaultModel);
     }
 
+    // Sanitize Codex models
+    const validCodexModelIds = new Set(getAllCodexModelIds());
+    const DEFAULT_CODEX_MODEL: CodexModelId = 'codex-gpt-5.2-codex';
+    const sanitizedEnabledCodexModels = (serverSettings.enabledCodexModels ?? []).filter(
+      (id): id is CodexModelId => validCodexModelIds.has(id as CodexModelId)
+    );
+    const sanitizedCodexDefaultModel = validCodexModelIds.has(
+      serverSettings.codexDefaultModel as CodexModelId
+    )
+      ? (serverSettings.codexDefaultModel as CodexModelId)
+      : DEFAULT_CODEX_MODEL;
+
+    if (!sanitizedEnabledCodexModels.includes(sanitizedCodexDefaultModel)) {
+      sanitizedEnabledCodexModels.push(sanitizedCodexDefaultModel);
+    }
+
+    // Sanitize Gemini models
+    const validGeminiModelIds = new Set(getAllGeminiModelIds());
+    const sanitizedEnabledGeminiModels = (serverSettings.enabledGeminiModels ?? []).filter(
+      (id): id is GeminiModelId => validGeminiModelIds.has(id as GeminiModelId)
+    );
+    const sanitizedGeminiDefaultModel = validGeminiModelIds.has(
+      serverSettings.geminiDefaultModel as GeminiModelId
+    )
+      ? (serverSettings.geminiDefaultModel as GeminiModelId)
+      : DEFAULT_GEMINI_MODEL;
+
+    if (!sanitizedEnabledGeminiModels.includes(sanitizedGeminiDefaultModel)) {
+      sanitizedEnabledGeminiModels.push(sanitizedGeminiDefaultModel);
+    }
+
     const persistedDynamicModelIds =
       serverSettings.enabledDynamicModelIds ?? currentAppState.enabledDynamicModelIds;
     const sanitizedDynamicModelIds = persistedDynamicModelIds.filter(
@@ -663,6 +699,10 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
       cursorDefaultModel: sanitizedCursorDefault,
       enabledOpencodeModels: sanitizedEnabledOpencodeModels,
       opencodeDefaultModel: sanitizedOpencodeDefaultModel,
+      enabledCodexModels: sanitizedEnabledCodexModels,
+      codexDefaultModel: sanitizedCodexDefaultModel,
+      enabledGeminiModels: sanitizedEnabledGeminiModels,
+      geminiDefaultModel: sanitizedGeminiDefaultModel,
       enabledDynamicModelIds: sanitizedDynamicModelIds,
       disabledProviders: serverSettings.disabledProviders ?? [],
       autoLoadClaudeMd: serverSettings.autoLoadClaudeMd ?? false,
