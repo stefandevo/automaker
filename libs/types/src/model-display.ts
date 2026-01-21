@@ -117,49 +117,18 @@ export const CODEX_MODELS: (ModelOption & { hasReasoning?: boolean })[] = [
 /**
  * Gemini model options with full metadata for UI display
  * Based on https://github.com/google-gemini/gemini-cli
+ * Model IDs match the keys in GEMINI_MODEL_MAP (e.g., 'gemini-2.5-flash')
  */
-export const GEMINI_MODELS: (ModelOption & { hasThinking?: boolean })[] = [
-  {
-    id: 'gemini-gemini-3-pro-preview' as GeminiModelId,
-    label: 'Gemini 3 Pro Preview',
-    description: 'Most advanced Gemini model with deep reasoning capabilities.',
-    badge: 'Premium',
-    provider: 'gemini',
-    hasThinking: true,
-  },
-  {
-    id: 'gemini-gemini-3-flash-preview' as GeminiModelId,
-    label: 'Gemini 3 Flash Preview',
-    description: 'Fast Gemini 3 model for quick tasks.',
-    badge: 'Speed',
-    provider: 'gemini',
-    hasThinking: true,
-  },
-  {
-    id: 'gemini-gemini-2.5-pro' as GeminiModelId,
-    label: 'Gemini 2.5 Pro',
-    description: 'Advanced model with strong reasoning and 1M context.',
-    badge: 'Premium',
-    provider: 'gemini',
-    hasThinking: true,
-  },
-  {
-    id: 'gemini-gemini-2.5-flash' as GeminiModelId,
-    label: 'Gemini 2.5 Flash',
-    description: 'Balanced speed and capability for most tasks.',
-    badge: 'Balanced',
-    provider: 'gemini',
-    hasThinking: true,
-  },
-  {
-    id: 'gemini-gemini-2.5-flash-lite' as GeminiModelId,
-    label: 'Gemini 2.5 Flash Lite',
-    description: 'Fastest Gemini model for simple tasks.',
-    badge: 'Speed',
-    provider: 'gemini',
-    hasThinking: false,
-  },
-];
+export const GEMINI_MODELS: (ModelOption & { hasThinking?: boolean })[] = Object.entries(
+  GEMINI_MODEL_MAP
+).map(([id, config]) => ({
+  id: id as GeminiModelId,
+  label: config.label,
+  description: config.description,
+  badge: config.supportsThinking ? 'Thinking' : 'Speed',
+  provider: 'gemini' as const,
+  hasThinking: config.supportsThinking,
+}));
 
 /**
  * Thinking level options with display labels
@@ -247,12 +216,6 @@ export function getModelDisplayName(model: ModelAlias | string): string {
     [CODEX_MODEL_MAP.gpt51CodexMini]: 'GPT-5.1-Codex-Mini',
     [CODEX_MODEL_MAP.gpt52]: 'GPT-5.2',
     [CODEX_MODEL_MAP.gpt51]: 'GPT-5.1',
-    // Gemini models
-    'gemini-gemini-3-pro-preview': 'Gemini 3 Pro Preview',
-    'gemini-gemini-3-flash-preview': 'Gemini 3 Flash Preview',
-    'gemini-gemini-2.5-pro': 'Gemini 2.5 Pro',
-    'gemini-gemini-2.5-flash': 'Gemini 2.5 Flash',
-    'gemini-gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
   };
 
   // Check direct match first
@@ -260,12 +223,9 @@ export function getModelDisplayName(model: ModelAlias | string): string {
     return displayNames[model];
   }
 
-  // Check Gemini model map
-  if (model.startsWith('gemini-')) {
-    const modelKey = model.replace(/^gemini-/, '');
-    if (modelKey in GEMINI_MODEL_MAP) {
-      return GEMINI_MODEL_MAP[modelKey as keyof typeof GEMINI_MODEL_MAP].label;
-    }
+  // Check Gemini model map - IDs are like 'gemini-2.5-flash'
+  if (model in GEMINI_MODEL_MAP) {
+    return GEMINI_MODEL_MAP[model as keyof typeof GEMINI_MODEL_MAP].label;
   }
 
   return model;
