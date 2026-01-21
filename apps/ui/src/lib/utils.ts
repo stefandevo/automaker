@@ -162,6 +162,9 @@ export function sanitizeForTestId(name: string): string {
  * @returns A RFC 4122 compliant UUID v4 string (e.g., "550e8400-e29b-41d4-a716-446655440000")
  */
 export function generateUUID(): string {
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues === 'undefined') {
+    throw new Error('Cryptographically secure random number generator not available.');
+  }
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
 
