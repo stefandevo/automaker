@@ -24,7 +24,7 @@ import type {
   ClaudeCompatibleProvider,
   ClaudeModelAlias,
 } from '@automaker/types';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
+import { DEFAULT_PHASE_MODELS, DEFAULT_GLOBAL_SETTINGS } from '@automaker/types';
 
 interface BulkReplaceDialogProps {
   open: boolean;
@@ -127,9 +127,9 @@ export function BulkReplaceDialog({ open, onOpenChange }: BulkReplaceDialogProps
   ): PhaseModelEntry => {
     if (!provider) {
       // Anthropic Direct - reset to default phase model (includes correct thinking levels)
-      // For default feature model, use opus as the default
+      // For default feature model, use the default from global settings
       if (key === DEFAULT_FEATURE_MODEL_KEY) {
-        return { model: 'claude-opus' };
+        return DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel;
       }
       return DEFAULT_PHASE_MODELS[key];
     }
@@ -199,7 +199,8 @@ export function BulkReplaceDialog({ open, onOpenChange }: BulkReplaceDialogProps
   // Generate preview of changes
   const preview = useMemo(() => {
     // Default feature model entry (first in the list)
-    const defaultFeatureModelEntry = defaultFeatureModel ?? { model: 'claude-opus' as const };
+    const defaultFeatureModelEntry =
+      defaultFeatureModel ?? DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel;
     const defaultFeaturePreview = generatePreviewItem(
       DEFAULT_FEATURE_MODEL_KEY,
       'Default Feature Model',

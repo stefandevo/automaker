@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PhaseModelSelector } from './phase-model-selector';
 import { BulkReplaceDialog } from './bulk-replace-dialog';
 import type { PhaseModelKey, PhaseModelEntry } from '@automaker/types';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
+import { DEFAULT_PHASE_MODELS, DEFAULT_GLOBAL_SETTINGS } from '@automaker/types';
 
 interface PhaseConfig {
   key: PhaseModelKey;
@@ -119,7 +119,8 @@ function PhaseGroup({
  */
 function FeatureDefaultModelSection() {
   const { defaultFeatureModel, setDefaultFeatureModel } = useAppStore();
-  const defaultValue: PhaseModelEntry = defaultFeatureModel ?? { model: 'claude-opus' };
+  const defaultValue: PhaseModelEntry =
+    defaultFeatureModel ?? DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel;
 
   return (
     <div className="space-y-4">
@@ -148,7 +149,12 @@ function FeatureDefaultModelSection() {
               </p>
             </div>
           </div>
-          <PhaseModelSelector compact value={defaultValue} onChange={setDefaultFeatureModel} align="end" />
+          <PhaseModelSelector
+            compact
+            value={defaultValue}
+            onChange={setDefaultFeatureModel}
+            align="end"
+          />
         </div>
       </div>
     </div>

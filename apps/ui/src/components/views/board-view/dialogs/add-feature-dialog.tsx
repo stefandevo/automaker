@@ -195,8 +195,13 @@ export function AddFeatureDialog({
   const [childDependencies, setChildDependencies] = useState<string[]>([]);
 
   // Get defaults from store
-  const { defaultPlanningMode, defaultRequirePlanApproval, useWorktrees, defaultFeatureModel, currentProject } =
-    useAppStore();
+  const {
+    defaultPlanningMode,
+    defaultRequirePlanApproval,
+    useWorktrees,
+    defaultFeatureModel,
+    currentProject,
+  } = useAppStore();
 
   // Use project-level default feature model if set, otherwise fall back to global
   const effectiveDefaultFeatureModel = currentProject?.defaultFeatureModel ?? defaultFeatureModel;

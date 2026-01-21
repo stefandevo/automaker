@@ -7,7 +7,7 @@ import type { Project } from '@/lib/electron';
 import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
 import { ProjectBulkReplaceDialog } from './project-bulk-replace-dialog';
 import type { PhaseModelKey, PhaseModelEntry } from '@automaker/types';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
+import { DEFAULT_PHASE_MODELS, DEFAULT_GLOBAL_SETTINGS } from '@automaker/types';
 
 interface ProjectModelsSectionProps {
   project: Project;
@@ -98,7 +98,8 @@ function FeatureDefaultModelOverrideSection({ project }: { project: Project }) {
     claudeCompatibleProviders,
   } = useAppStore();
 
-  const globalValue: PhaseModelEntry = globalDefaultFeatureModel ?? { model: 'claude-opus' };
+  const globalValue: PhaseModelEntry =
+    globalDefaultFeatureModel ?? DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel;
   const projectOverride = project.defaultFeatureModel;
   const hasOverride = !!projectOverride;
   const effectiveValue = projectOverride || globalValue;

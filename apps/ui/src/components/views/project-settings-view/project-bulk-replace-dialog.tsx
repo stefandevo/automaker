@@ -25,7 +25,7 @@ import type {
   ClaudeCompatibleProvider,
   ClaudeModelAlias,
 } from '@automaker/types';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
+import { DEFAULT_PHASE_MODELS, DEFAULT_GLOBAL_SETTINGS } from '@automaker/types';
 
 interface ProjectBulkReplaceDialogProps {
   open: boolean;
@@ -66,7 +66,13 @@ export function ProjectBulkReplaceDialog({
   onOpenChange,
   project,
 }: ProjectBulkReplaceDialogProps) {
-  const { phaseModels, setProjectPhaseModelOverride, claudeCompatibleProviders, defaultFeatureModel, setProjectDefaultFeatureModel } = useAppStore();
+  const {
+    phaseModels,
+    setProjectPhaseModelOverride,
+    claudeCompatibleProviders,
+    defaultFeatureModel,
+    setProjectDefaultFeatureModel,
+  } = useAppStore();
   const [selectedProvider, setSelectedProvider] = useState<string>('anthropic');
 
   // Get project-level overrides
@@ -131,9 +137,9 @@ export function ProjectBulkReplaceDialog({
   ): PhaseModelEntry => {
     if (!provider) {
       // Anthropic Direct - reset to default phase model (includes correct thinking levels)
-      // For default feature model, use opus as the default
+      // For default feature model, use the default from global settings
       if (key === DEFAULT_FEATURE_MODEL_KEY) {
-        return { model: 'claude-opus' };
+        return DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel;
       }
       return DEFAULT_PHASE_MODELS[key];
     }
@@ -203,7 +209,7 @@ export function ProjectBulkReplaceDialog({
   // Generate preview of changes
   const preview = useMemo(() => {
     // Default feature model entry (first in the list)
-    const globalDefaultFeature = defaultFeatureModel ?? { model: 'claude-opus' as const };
+    const globalDefaultFeature = defaultFeatureModel ?? DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel;
     const currentDefaultFeature = projectDefaultFeatureModel || globalDefaultFeature;
     const defaultFeaturePreview = generatePreviewItem(
       DEFAULT_FEATURE_MODEL_KEY,
@@ -219,7 +225,14 @@ export function ProjectBulkReplaceDialog({
     });
 
     return [defaultFeaturePreview, ...phasePreview];
-  }, [phaseModels, projectOverrides, selectedProviderConfig, enabledProviders, defaultFeatureModel, projectDefaultFeatureModel]);
+  }, [
+    phaseModels,
+    projectOverrides,
+    selectedProviderConfig,
+    enabledProviders,
+    defaultFeatureModel,
+    projectDefaultFeatureModel,
+  ]);
 
   // Count how many will change
   const changeCount = preview.filter((p) => p.isChanged).length;

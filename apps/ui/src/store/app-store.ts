@@ -42,6 +42,7 @@ import {
   DEFAULT_PHASE_MODELS,
   DEFAULT_OPENCODE_MODEL,
   DEFAULT_MAX_CONCURRENCY,
+  DEFAULT_GLOBAL_SETTINGS,
 } from '@automaker/types';
 
 const logger = createLogger('AppStore');
@@ -1533,7 +1534,7 @@ const initialState: AppState = {
   specCreatingForProject: null,
   defaultPlanningMode: 'skip' as PlanningMode,
   defaultRequirePlanApproval: false,
-  defaultFeatureModel: { model: 'claude-opus' } as PhaseModelEntry,
+  defaultFeatureModel: DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel,
   pendingPlanApproval: null,
   claudeRefreshInterval: 60,
   claudeUsage: null,
@@ -2624,7 +2625,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   resetPhaseModels: async () => {
     set({
       phaseModels: DEFAULT_PHASE_MODELS,
-      defaultFeatureModel: { model: 'claude-opus' },
+      defaultFeatureModel: DEFAULT_GLOBAL_SETTINGS.defaultFeatureModel,
     });
     // Sync to server settings file
     const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
