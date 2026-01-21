@@ -12,9 +12,18 @@ const LOG_LEVEL_OPTIONS: { value: ServerLogLevel; label: string; description: st
   { value: 'debug', label: 'Debug', description: 'Show all messages including debug' },
 ];
 
+// Check if we're in development mode
+const IS_DEV = import.meta.env.DEV;
+
 export function DeveloperSection() {
-  const { serverLogLevel, setServerLogLevel, enableRequestLogging, setEnableRequestLogging } =
-    useAppStore();
+  const {
+    serverLogLevel,
+    setServerLogLevel,
+    enableRequestLogging,
+    setEnableRequestLogging,
+    showQueryDevtools,
+    setShowQueryDevtools,
+  } = useAppStore();
 
   return (
     <div
@@ -83,6 +92,30 @@ export function DeveloperSection() {
                 description: 'HTTP request logging updated',
               });
             }}
+          />
+        </div>
+
+        {/* React Query DevTools */}
+        <div className="flex items-center justify-between pt-4 border-t border-border/30">
+          <div className="space-y-1">
+            <Label className="text-foreground font-medium">React Query DevTools</Label>
+            <p className="text-xs text-muted-foreground">
+              {IS_DEV
+                ? 'Show React Query DevTools panel in the bottom-right corner for debugging queries and cache.'
+                : 'Only available in development mode.'}
+            </p>
+          </div>
+          <Switch
+            checked={showQueryDevtools}
+            onCheckedChange={(checked) => {
+              setShowQueryDevtools(checked);
+              toast.success(checked ? 'Query DevTools enabled' : 'Query DevTools disabled', {
+                description: IS_DEV
+                  ? 'React Query DevTools visibility updated'
+                  : 'This setting only takes effect in development mode',
+              });
+            }}
+            disabled={!IS_DEV}
           />
         </div>
       </div>
