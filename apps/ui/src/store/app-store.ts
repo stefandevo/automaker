@@ -509,6 +509,7 @@ export interface ProjectAnalysis {
 // Terminal panel layout types (recursive for splits)
 export type TerminalPanelContent =
   | { type: 'terminal'; sessionId: string; size?: number; fontSize?: number; branchName?: string }
+  | { type: 'testRunner'; sessionId: string; size?: number; worktreePath: string }
   | {
       type: 'split';
       id: string; // Stable ID for React key stability
@@ -546,6 +547,7 @@ export interface TerminalState {
 // Used to restore terminal layout structure when switching projects
 export type PersistedTerminalPanel =
   | { type: 'terminal'; size?: number; fontSize?: number; sessionId?: string; branchName?: string }
+  | { type: 'testRunner'; size?: number; sessionId?: string; worktreePath?: string }
   | {
       type: 'split';
       id?: string; // Optional for backwards compatibility with older persisted layouts
@@ -3195,7 +3197,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       targetId: string,
       targetDirection: 'horizontal' | 'vertical'
     ): TerminalPanelContent => {
-      if (node.type === 'terminal') {
+      if (node.type === 'terminal' || node.type === 'testRunner') {
         if (node.sessionId === targetId) {
           // Found the target - split it
           return {
@@ -3220,7 +3222,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       node: TerminalPanelContent,
       targetDirection: 'horizontal' | 'vertical'
     ): TerminalPanelContent => {
-      if (node.type === 'terminal') {
+      if (node.type === 'terminal' || node.type === 'testRunner') {
         return {
           type: 'split',
           id: generateSplitId(),
@@ -3228,7 +3230,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
           panels: [{ ...node, size: 50 }, newTerminal],
         };
       }
-      // If same direction, add to existing split
+      // It's a split - if same direction, add to existing split
       if (node.direction === targetDirection) {
         const newSize = 100 / (node.panels.length + 1);
         return {
@@ -3277,7 +3279,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     // Find which tab contains this session
     const findFirstTerminal = (node: TerminalPanelContent | null): string | null => {
       if (!node) return null;
-      if (node.type === 'terminal') return node.sessionId;
+      if (node.type === 'terminal' || node.type === 'testRunner') return node.sessionId;
       for (const panel of node.panels) {
         const found = findFirstTerminal(panel);
         if (found) return found;
@@ -3286,7 +3288,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     };
 
     const removeAndCollapse = (node: TerminalPanelContent): TerminalPanelContent | null => {
-      if (node.type === 'terminal') {
+      if (node.type === 'terminal' || node.type === 'testRunner') {
         return node.sessionId === sessionId ? null : node;
       }
       const newPanels: TerminalPanelContent[] = [];
@@ -3345,6 +3347,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         if (node.sessionId === sessionId2) return { ...node, sessionId: sessionId1 };
         return node;
       }
+      if (node.type === 'testRunner') {
+        // testRunner panels don't participate in swapping
+        return node;
+      }
       return { ...node, panels: node.panels.map(swapInLayout) };
     };
 
@@ -3395,6 +3401,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         if (node.sessionId === sessionId) {
           return { ...node, fontSize: clampedSize };
         }
+        return node;
+      }
+      if (node.type === 'testRunner') {
+        // testRunner panels don't have fontSize
         return node;
       }
       return { ...node, panels: node.panels.map(updateFontSize) };
@@ -3510,7 +3520,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       if (newActiveTabId) {
         const newActiveTab = newTabs.find((t) => t.id === newActiveTabId);
         const findFirst = (node: TerminalPanelContent): string | null => {
-          if (node.type === 'terminal') return node.sessionId;
+          if (node.type === 'terminal' || node.type === 'testRunner') return node.sessionId;
           for (const p of node.panels) {
             const f = findFirst(p);
             if (f) return f;
@@ -3541,7 +3551,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     let newActiveSessionId = current.activeSessionId;
     if (tab.layout) {
       const findFirst = (node: TerminalPanelContent): string | null => {
-        if (node.type === 'terminal') return node.sessionId;
+        if (node.type === 'terminal' || node.type === 'testRunner') return node.sessionId;
         for (const p of node.panels) {
           const f = findFirst(p);
           if (f) return f;
@@ -3602,6 +3612,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       if (node.type === 'terminal') {
         return node.sessionId === sessionId ? node : null;
       }
+      if (node.type === 'testRunner') {
+        // testRunner panels don't participate in moveTerminalToTab
+        return null;
+      }
       for (const panel of node.panels) {
         const found = findTerminal(panel);
         if (found) return found;
@@ -3626,7 +3640,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     if (!sourceTab?.layout) return;
 
     const removeAndCollapse = (node: TerminalPanelContent): TerminalPanelContent | null => {
-      if (node.type === 'terminal') {
+      if (node.type === 'terminal' || node.type === 'testRunner') {
         return node.sessionId === sessionId ? null : node;
       }
       const newPanels: TerminalPanelContent[] = [];
@@ -3687,7 +3701,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
           size: 100,
           fontSize: originalTerminalNode.fontSize,
         };
-      } else if (targetTab.layout.type === 'terminal') {
+      } else if (targetTab.layout.type === 'terminal' || targetTab.layout.type === 'testRunner') {
         newTargetLayout = {
           type: 'split',
           id: generateSplitId(),
@@ -3695,6 +3709,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
           panels: [{ ...targetTab.layout, size: 50 }, terminalNode],
         };
       } else {
+        // It's a split
         newTargetLayout = {
           ...targetTab.layout,
           panels: [...targetTab.layout.panels, terminalNode],
@@ -3737,7 +3752,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     if (!tab.layout) {
       newLayout = { type: 'terminal', sessionId, size: 100, branchName };
-    } else if (tab.layout.type === 'terminal') {
+    } else if (tab.layout.type === 'terminal' || tab.layout.type === 'testRunner') {
       newLayout = {
         type: 'split',
         id: generateSplitId(),
@@ -3745,6 +3760,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         panels: [{ ...tab.layout, size: 50 }, terminalNode],
       };
     } else {
+      // It's a split
       if (tab.layout.direction === direction) {
         const newSize = 100 / (tab.layout.panels.length + 1);
         newLayout = {
@@ -3785,7 +3801,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     // Find first terminal in layout if no activeSessionId provided
     const findFirst = (node: TerminalPanelContent): string | null => {
-      if (node.type === 'terminal') return node.sessionId;
+      if (node.type === 'terminal' || node.type === 'testRunner') return node.sessionId;
       for (const p of node.panels) {
         const found = findFirst(p);
         if (found) return found;
@@ -3818,7 +3834,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     // Helper to generate panel key (matches getPanelKey in terminal-view.tsx)
     const getPanelKey = (panel: TerminalPanelContent): string => {
-      if (panel.type === 'terminal') return panel.sessionId;
+      if (panel.type === 'terminal' || panel.type === 'testRunner') return panel.sessionId;
       const childKeys = panel.panels.map(getPanelKey).join('-');
       return `split-${panel.direction}-${childKeys}`;
     };
@@ -3828,7 +3844,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       const key = getPanelKey(panel);
       const newSize = sizeMap.get(key);
 
-      if (panel.type === 'terminal') {
+      if (panel.type === 'terminal' || panel.type === 'testRunner') {
         return newSize !== undefined ? { ...panel, size: newSize } : panel;
       }
 
@@ -3869,6 +3885,14 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
           fontSize: panel.fontSize,
           sessionId: panel.sessionId, // Preserve for reconnection
           branchName: panel.branchName, // Preserve branch name for display
+        };
+      }
+      if (panel.type === 'testRunner') {
+        return {
+          type: 'testRunner',
+          size: panel.size,
+          sessionId: panel.sessionId, // Preserve for reconnection
+          worktreePath: panel.worktreePath, // Preserve worktree context
         };
       }
       return {
