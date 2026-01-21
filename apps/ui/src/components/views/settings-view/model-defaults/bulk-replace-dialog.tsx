@@ -60,7 +60,13 @@ const CLAUDE_MODEL_DISPLAY: Record<ClaudeModelAlias, string> = {
 };
 
 export function BulkReplaceDialog({ open, onOpenChange }: BulkReplaceDialogProps) {
-  const { phaseModels, setPhaseModel, claudeCompatibleProviders, defaultFeatureModel, setDefaultFeatureModel } = useAppStore();
+  const {
+    phaseModels,
+    setPhaseModel,
+    claudeCompatibleProviders,
+    defaultFeatureModel,
+    setDefaultFeatureModel,
+  } = useAppStore();
   const [selectedProvider, setSelectedProvider] = useState<string>('anthropic');
 
   // Get enabled providers
@@ -117,11 +123,15 @@ export function BulkReplaceDialog({ open, onOpenChange }: BulkReplaceDialogProps
   const findModelForClaudeAlias = (
     provider: ClaudeCompatibleProvider | null,
     claudeAlias: ClaudeModelAlias,
-    phase: PhaseModelKey
+    key: ExtendedPhaseKey
   ): PhaseModelEntry => {
     if (!provider) {
       // Anthropic Direct - reset to default phase model (includes correct thinking levels)
-      return DEFAULT_PHASE_MODELS[phase];
+      // For default feature model, use opus as the default
+      if (key === DEFAULT_FEATURE_MODEL_KEY) {
+        return { model: 'claude-opus' };
+      }
+      return DEFAULT_PHASE_MODELS[key];
     }
 
     // Find model that maps to this Claude alias
@@ -148,12 +158,7 @@ export function BulkReplaceDialog({ open, onOpenChange }: BulkReplaceDialogProps
     currentEntry: PhaseModelEntry
   ) => {
     const claudeAlias = getClaudeModelAlias(currentEntry);
-    // For default feature model, we use a dummy phase key just to satisfy the type
-    const newEntry = findModelForClaudeAlias(
-      selectedProviderConfig,
-      claudeAlias,
-      key === DEFAULT_FEATURE_MODEL_KEY ? 'enhancementModel' : key
-    );
+    const newEntry = findModelForClaudeAlias(selectedProviderConfig, claudeAlias, key);
 
     // Get display names
     const getCurrentDisplay = (): string => {
