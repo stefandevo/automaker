@@ -196,6 +196,7 @@ export {
 export type { ModelOption, ThinkingLevelOption, ReasoningEffortOption } from './model-display.js';
 export {
   CLAUDE_MODELS,
+  GEMINI_MODELS,
   THINKING_LEVELS,
   THINKING_LEVEL_LABELS,
   REASONING_EFFORT_LEVELS,
@@ -240,6 +241,9 @@ export * from './cursor-cli.js';
 // OpenCode types
 export * from './opencode-models.js';
 
+// Gemini types
+export * from './gemini-models.js';
+
 // Provider utilities
 export {
   PROVIDER_PREFIXES,
@@ -247,6 +251,7 @@ export {
   isClaudeModel,
   isCodexModel,
   isOpencodeModel,
+  isGeminiModel,
   getModelProvider,
   stripProviderPrefix,
   addProviderPrefix,
