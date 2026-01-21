@@ -136,8 +136,9 @@ export const KanbanCard = memo(function KanbanCard({
   });
 
   // Make the card a drop target for creating dependency links
-  // Only backlog cards can be link targets (to avoid complexity with running features)
-  const isDroppable = !isOverlay && feature.status === 'backlog' && !isSelectionMode;
+  // All non-completed cards can be link targets to allow flexible dependency creation
+  // (completed features are excluded as they're already done)
+  const isDroppable = !isOverlay && feature.status !== 'completed' && !isSelectionMode;
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: `card-drop-${feature.id}`,
     disabled: !isDroppable,
