@@ -329,3 +329,19 @@ export { PR_STATES, validatePRState } from './worktree.js';
 
 // Terminal types
 export type { TerminalInfo } from './terminal.js';
+
+// Project overview types (multi-project dashboard)
+export type {
+  ProjectHealthStatus,
+  FeatureStatusCounts,
+  ProjectStatus,
+  AggregateFeatureCounts,
+  AggregateProjectCounts,
+  AggregateStatus,
+  ActivityType,
+  ActivitySeverity,
+  RecentActivity,
+  ActivityFeedOptions,
+  MultiProjectOverview,
+  ProjectOverviewError,
+} from './project-overview.js';

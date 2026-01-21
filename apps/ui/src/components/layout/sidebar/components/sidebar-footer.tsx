@@ -1,7 +1,7 @@
 import type { NavigateOptions } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { formatShortcut } from '@/store/app-store';
-import { Activity, Settings } from 'lucide-react';
+import { Activity, Settings, LayoutDashboard } from 'lucide-react';
 
 interface SidebarFooterProps {
   sidebarOpen: boolean;
@@ -32,6 +32,65 @@ export function SidebarFooter({
         'bg-gradient-to-t from-background/10 via-sidebar/50 to-transparent'
       )}
     >
+      {/* Projects Overview Link */}
+      <div className="p-2 pb-0">
+        <button
+          onClick={() => navigate({ to: '/overview' })}
+          className={cn(
+            'group flex items-center w-full px-3 py-2.5 rounded-xl relative overflow-hidden titlebar-no-drag',
+            'transition-all duration-200 ease-out',
+            isActiveRoute('overview')
+              ? [
+                  'bg-gradient-to-r from-brand-500/20 via-brand-500/15 to-brand-600/10',
+                  'text-foreground font-medium',
+                  'border border-brand-500/30',
+                  'shadow-md shadow-brand-500/10',
+                ]
+              : [
+                  'text-muted-foreground hover:text-foreground',
+                  'hover:bg-accent/50',
+                  'border border-transparent hover:border-border/40',
+                  'hover:shadow-sm',
+                ],
+            sidebarOpen ? 'justify-start' : 'justify-center',
+            'hover:scale-[1.02] active:scale-[0.97]'
+          )}
+          title={!sidebarOpen ? 'Projects Overview' : undefined}
+          data-testid="projects-overview-link"
+        >
+          <LayoutDashboard
+            className={cn(
+              'w-[18px] h-[18px] shrink-0 transition-all duration-200',
+              isActiveRoute('overview')
+                ? 'text-brand-500 drop-shadow-sm'
+                : 'group-hover:text-brand-400 group-hover:scale-110'
+            )}
+          />
+          <span
+            className={cn(
+              'ml-3 font-medium text-sm flex-1 text-left',
+              sidebarOpen ? 'block' : 'hidden'
+            )}
+          >
+            Projects Overview
+          </span>
+          {!sidebarOpen && (
+            <span
+              className={cn(
+                'absolute left-full ml-3 px-2.5 py-1.5 rounded-lg',
+                'bg-popover text-popover-foreground text-xs font-medium',
+                'border border-border shadow-lg',
+                'opacity-0 group-hover:opacity-100',
+                'transition-all duration-200 whitespace-nowrap z-50',
+                'translate-x-1 group-hover:translate-x-0'
+              )}
+            >
+              Projects Overview
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Running Agents Link */}
       {!hideRunningAgents && (
         <div className="p-2 pb-0">
