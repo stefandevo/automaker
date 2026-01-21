@@ -95,29 +95,27 @@ export function DeveloperSection() {
           />
         </div>
 
-        {/* React Query DevTools */}
-        <div className="flex items-center justify-between pt-4 border-t border-border/30">
-          <div className="space-y-1">
-            <Label className="text-foreground font-medium">React Query DevTools</Label>
-            <p className="text-xs text-muted-foreground">
-              {IS_DEV
-                ? 'Show React Query DevTools panel in the bottom-right corner for debugging queries and cache.'
-                : 'Only available in development mode.'}
-            </p>
+        {/* React Query DevTools - only shown in development mode */}
+        {IS_DEV && (
+          <div className="flex items-center justify-between pt-4 border-t border-border/30">
+            <div className="space-y-1">
+              <Label className="text-foreground font-medium">React Query DevTools</Label>
+              <p className="text-xs text-muted-foreground">
+                Show React Query DevTools panel in the bottom-right corner for debugging queries and
+                cache.
+              </p>
+            </div>
+            <Switch
+              checked={showQueryDevtools}
+              onCheckedChange={(checked) => {
+                setShowQueryDevtools(checked);
+                toast.success(checked ? 'Query DevTools enabled' : 'Query DevTools disabled', {
+                  description: 'React Query DevTools visibility updated',
+                });
+              }}
+            />
           </div>
-          <Switch
-            checked={showQueryDevtools}
-            onCheckedChange={(checked) => {
-              setShowQueryDevtools(checked);
-              toast.success(checked ? 'Query DevTools enabled' : 'Query DevTools disabled', {
-                description: IS_DEV
-                  ? 'React Query DevTools visibility updated'
-                  : 'This setting only takes effect in development mode',
-              });
-            }}
-            disabled={!IS_DEV}
-          />
-        </div>
+        )}
       </div>
     </div>
   );
