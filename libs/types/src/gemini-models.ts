@@ -60,24 +60,22 @@ export const GEMINI_MODEL_MAP = {
   },
 } as const satisfies Record<string, GeminiModelConfig>;
 
-export type GeminiModelKey = keyof typeof GEMINI_MODEL_MAP;
-
 /**
- * Canonical model ID type with gemini- prefix
+ * Gemini model ID type (keys already have gemini- prefix)
  */
-export type GeminiModelId = `gemini-${GeminiModelKey}`;
+export type GeminiModelId = keyof typeof GEMINI_MODEL_MAP;
 
 /**
- * Get all Gemini model IDs with canonical prefix
+ * Get all Gemini model IDs
  */
 export function getAllGeminiModelIds(): GeminiModelId[] {
-  return Object.keys(GEMINI_MODEL_MAP).map((key) => `gemini-${key}` as GeminiModelId);
+  return Object.keys(GEMINI_MODEL_MAP) as GeminiModelId[];
 }
 
 /**
  * Default Gemini model (balanced choice)
  */
-export const DEFAULT_GEMINI_MODEL: GeminiModelId = 'gemini-gemini-2.5-flash';
+export const DEFAULT_GEMINI_MODEL: GeminiModelId = 'gemini-2.5-flash';
 
 /**
  * Thinking level configuration for Gemini CLI

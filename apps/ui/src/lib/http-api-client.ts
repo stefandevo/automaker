@@ -1598,6 +1598,48 @@ export class HttpApiClient implements ElectronAPI {
       error?: string;
     }> => this.post('/api/setup/opencode/cache/clear'),
 
+    // Gemini CLI methods
+    getGeminiStatus: (): Promise<{
+      success: boolean;
+      status?: string;
+      installed?: boolean;
+      method?: string;
+      version?: string;
+      path?: string;
+      recommendation?: string;
+      installCommands?: {
+        macos?: string;
+        linux?: string;
+        npm?: string;
+      };
+      auth?: {
+        authenticated: boolean;
+        method: string;
+        hasApiKey?: boolean;
+        hasEnvApiKey?: boolean;
+        error?: string;
+      };
+      loginCommand?: string;
+      installCommand?: string;
+      error?: string;
+    }> => this.get('/api/setup/gemini-status'),
+
+    authGemini: (): Promise<{
+      success: boolean;
+      requiresManualAuth?: boolean;
+      command?: string;
+      message?: string;
+      error?: string;
+    }> => this.post('/api/setup/auth-gemini'),
+
+    deauthGemini: (): Promise<{
+      success: boolean;
+      requiresManualDeauth?: boolean;
+      command?: string;
+      message?: string;
+      error?: string;
+    }> => this.post('/api/setup/deauth-gemini'),
+
     onInstallProgress: (callback: (progress: unknown) => void) => {
       return this.subscribeToEvent('agent:stream', callback);
     },
