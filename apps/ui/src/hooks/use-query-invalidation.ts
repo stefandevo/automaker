@@ -5,12 +5,18 @@
  * ensuring the UI stays in sync with server-side changes without manual refetching.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getElectronAPI } from '@/lib/electron';
 import { queryKeys } from '@/lib/query-keys';
 import type { AutoModeEvent, SpecRegenerationEvent } from '@/types/electron';
 import type { IssueValidationEvent } from '@automaker/types';
+
+/**
+ * Debounce delay for agent output invalidations (ms).
+ * This prevents excessive refetches when auto_mode_progress events fire rapidly.
+ */
+const AGENT_OUTPUT_INVALIDATE_DEBOUNCE_MS = 1000;
 
 /**
  * Invalidate queries based on auto mode events
@@ -31,6 +37,45 @@ import type { IssueValidationEvent } from '@automaker/types';
  */
 export function useAutoModeQueryInvalidation(projectPath: string | undefined) {
   const queryClient = useQueryClient();
+
+  // Track pending debounced invalidations per feature ID
+  // Key: featureId, Value: timeout ID
+  const pendingInvalidationsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Debounced agent output invalidation
+  const debouncedInvalidateAgentOutput = useCallback(
+    (featureId: string) => {
+      if (!projectPath) return;
+
+      const pendingInvalidations = pendingInvalidationsRef.current;
+
+      // Clear any existing pending invalidation for this feature
+      const existingTimeout = pendingInvalidations.get(featureId);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      // Schedule a new debounced invalidation
+      const timeoutId = setTimeout(() => {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.features.agentOutput(projectPath, featureId),
+        });
+        pendingInvalidations.delete(featureId);
+      }, AGENT_OUTPUT_INVALIDATE_DEBOUNCE_MS);
+
+      pendingInvalidations.set(featureId, timeoutId);
+    },
+    [projectPath, queryClient]
+  );
+
+  // Cleanup pending timeouts on unmount
+  useEffect(() => {
+    return () => {
+      const pendingInvalidations = pendingInvalidationsRef.current;
+      pendingInvalidations.forEach((timeoutId) => clearTimeout(timeoutId));
+      pendingInvalidations.clear();
+    };
+  }, []);
 
   useEffect(() => {
     if (!projectPath) return;
@@ -76,11 +121,10 @@ export function useAutoModeQueryInvalidation(projectPath: string | undefined) {
         });
       }
 
-      // Invalidate agent output during progress updates
+      // Debounced invalidation for agent output during progress updates
+      // This prevents excessive refetches when progress events fire rapidly
       if (event.type === 'auto_mode_progress' && 'featureId' in event) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.features.agentOutput(projectPath, event.featureId),
-        });
+        debouncedInvalidateAgentOutput(event.featureId);
       }
 
       // Invalidate worktree queries when feature completes (may have created worktree)
@@ -95,7 +139,7 @@ export function useAutoModeQueryInvalidation(projectPath: string | undefined) {
     });
 
     return unsubscribe;
-  }, [projectPath, queryClient]);
+  }, [projectPath, queryClient, debouncedInvalidateAgentOutput]);
 }
 
 /**

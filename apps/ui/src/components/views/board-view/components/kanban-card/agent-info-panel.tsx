@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, useMemo } from 'react';
+import { memo, useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Feature, ThinkingLevel, ParsedTask } from '@/store/app-store';
 import type { ReasoningEffort } from '@automaker/types';
 import { getProviderFromModel } from '@/lib/utils';
@@ -16,6 +16,24 @@ import { getElectronAPI } from '@/lib/electron';
 import { SummaryDialog } from './summary-dialog';
 import { getProviderIconForModel } from '@/components/ui/provider-icon';
 import { useFeature, useAgentOutput } from '@/hooks/queries';
+
+/**
+ * Polling interval when NOT receiving active WebSocket events (ms).
+ * This serves as a fallback when events stop flowing.
+ */
+const DEFAULT_POLLING_INTERVAL_MS = 3000;
+
+/**
+ * Polling interval when actively receiving WebSocket events (ms).
+ * Longer interval since events already drive cache invalidation.
+ */
+const REDUCED_POLLING_INTERVAL_MS = 10000;
+
+/**
+ * Time window for considering events as "active" (ms).
+ * If we received an event within this window, we use reduced polling.
+ */
+const EVENT_ACTIVITY_WINDOW_MS = 5000;
 
 /**
  * Formats thinking level for compact display
@@ -70,20 +88,55 @@ export const AgentInfoPanel = memo(function AgentInfoPanel({
     Map<string, 'pending' | 'in_progress' | 'completed'>
   >(new Map());
 
+  // Track last event time to determine if we're actively receiving WebSocket events
+  const lastEventTimeRef = useRef<number>(0);
+  const [isReceivingEvents, setIsReceivingEvents] = useState(false);
+
+  // Update event activity status periodically
+  useEffect(() => {
+    if (feature.status !== 'in_progress') {
+      setIsReceivingEvents(false);
+      return;
+    }
+
+    const checkEventActivity = () => {
+      const now = Date.now();
+      const timeSinceLastEvent = now - lastEventTimeRef.current;
+      setIsReceivingEvents(timeSinceLastEvent < EVENT_ACTIVITY_WINDOW_MS);
+    };
+
+    // Check immediately and periodically
+    checkEventActivity();
+    const intervalId = setInterval(checkEventActivity, 1000);
+    return () => clearInterval(intervalId);
+  }, [feature.status]);
+
+  // Record when we receive events for this feature
+  const markEventReceived = useCallback(() => {
+    lastEventTimeRef.current = Date.now();
+  }, []);
+
   // Determine if we should poll for updates
   const shouldPoll = isCurrentAutoTask || feature.status === 'in_progress';
   const shouldFetchData = feature.status !== 'backlog';
 
+  // Use reduced polling when receiving WebSocket events (they drive invalidation)
+  const pollingInterval = shouldPoll
+    ? isReceivingEvents
+      ? REDUCED_POLLING_INTERVAL_MS
+      : DEFAULT_POLLING_INTERVAL_MS
+    : false;
+
   // Fetch fresh feature data for planSpec (store data can be stale for task progress)
   const { data: freshFeature } = useFeature(projectPath, feature.id, {
     enabled: shouldFetchData && !contextContent,
-    pollingInterval: shouldPoll ? 3000 : false,
+    pollingInterval,
   });
 
   // Fetch agent output for parsing
   const { data: agentOutputContent } = useAgentOutput(projectPath, feature.id, {
     enabled: shouldFetchData && !contextContent,
-    pollingInterval: shouldPoll ? 3000 : false,
+    pollingInterval,
   });
 
   // Parse agent output into agentInfo
@@ -174,6 +227,9 @@ export const AgentInfoPanel = memo(function AgentInfoPanel({
       // Only handle events for this feature
       if (!('featureId' in event) || event.featureId !== feature.id) return;
 
+      // Mark that we received an event (for adaptive polling)
+      markEventReceived();
+
       switch (event.type) {
         case 'auto_mode_task_started':
           if ('taskId' in event) {
@@ -201,7 +257,7 @@ export const AgentInfoPanel = memo(function AgentInfoPanel({
     });
 
     return unsubscribe;
-  }, [feature.id, shouldListenToEvents]);
+  }, [feature.id, shouldListenToEvents, markEventReceived]);
 
   // Model/Preset Info for Backlog Cards
   if (feature.status === 'backlog') {
