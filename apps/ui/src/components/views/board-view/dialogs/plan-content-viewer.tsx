@@ -37,17 +37,25 @@ function parsePlanContent(content: string): ParsedPlanContent {
     // Plans typically start with # or ## headings
     if (
       !inJsonBlock &&
-      !currentTool &&
-      (trimmed.match(/^#{1,3}\s+\w/) || // Markdown headings
+      (trimmed.match(/^#{1,3}\s+\S/) || // Markdown headings (including emoji like ## ✅ Plan)
         trimmed.startsWith('---') || // Horizontal rule often used as separator
-        trimmed.match(/^\*\*[A-Z]/)) // Bold text starting a section
+        trimmed.match(/^\*\*\S/)) // Bold text starting a section
     ) {
+      // Flush any active tool call before starting the plan
+      if (currentTool && currentInput.length > 0) {
+        toolCalls.push({
+          tool: currentTool,
+          input: currentInput.join('\n').trim(),
+        });
+        currentTool = null;
+        currentInput = [];
+      }
       planStartIndex = i;
       break;
     }
 
-    // Detect tool call start
-    const toolMatch = trimmed.match(/^(?:🔧\s*)?Tool:\s*(\w+)/i);
+    // Detect tool call start (supports tool names with dots/hyphens like web.run, file-read)
+    const toolMatch = trimmed.match(/^(?:🔧\s*)?Tool:\s*([^\s]+)/i);
     if (toolMatch && !inJsonBlock) {
       // Save previous tool call if exists
       if (currentTool && currentInput.length > 0) {
