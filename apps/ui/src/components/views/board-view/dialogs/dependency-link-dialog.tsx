@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp, Link2, X } from 'lucide-react';
 import type { Feature } from '@/store/app-store';
 import { cn } from '@/lib/utils';
-import { StatusBadge } from '../components/list-view/status-badge';
+import { StatusBadge } from '../components';
 import type { FeatureStatusWithPipeline } from '@automaker/types';
 
 export type DependencyLinkType = 'parent' | 'child';
