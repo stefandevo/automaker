@@ -44,7 +44,8 @@ export function PlanApprovalDialog({
   const [rejectFeedback, setRejectFeedback] = useState('');
   const [showFullDescription, setShowFullDescription] = useState(false);
 
-  const DESCRIPTION_LIMIT = 150;
+  const DESCRIPTION_LIMIT = 250;
+  const TITLE_LIMIT = 50;
 
   // Reset state when dialog opens or plan content changes
   useEffect(() => {
@@ -86,7 +87,12 @@ export function PlanApprovalDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl" data-testid="plan-approval-dialog">
         <DialogHeader>
-          <DialogTitle>{viewOnly ? 'View Plan' : 'Review Plan'}</DialogTitle>
+          <DialogTitle>
+            {viewOnly ? 'View Plan' : 'Review Plan'}
+            {feature?.title && feature.title.length <= TITLE_LIMIT && (
+              <span className="font-normal text-muted-foreground"> - {feature.title}</span>
+            )}
+          </DialogTitle>
           <DialogDescription>
             {viewOnly
               ? 'View the generated plan for this feature.'
