@@ -43,7 +43,6 @@ import { createEnhancePromptRoutes } from './routes/enhance-prompt/index.js';
 import { createWorktreeRoutes } from './routes/worktree/index.js';
 import { createGitRoutes } from './routes/git/index.js';
 import { createSetupRoutes } from './routes/setup/index.js';
-import { createSuggestionsRoutes } from './routes/suggestions/index.js';
 import { createModelsRoutes } from './routes/models/index.js';
 import { createRunningAgentsRoutes } from './routes/running-agents/index.js';
 import { createWorkspaceRoutes } from './routes/workspace/index.js';
@@ -83,6 +82,7 @@ import { createNotificationsRoutes } from './routes/notifications/index.js';
 import { getNotificationService } from './services/notification-service.js';
 import { createEventHistoryRoutes } from './routes/event-history/index.js';
 import { getEventHistoryService } from './services/event-history-service.js';
+import { getTestRunnerService } from './services/test-runner-service.js';
 
 // Load environment variables
 dotenv.config();
@@ -248,6 +248,10 @@ notificationService.setEventEmitter(events);
 // Initialize Event History Service
 const eventHistoryService = getEventHistoryService();
 
+// Initialize Test Runner Service with event emitter for real-time test output streaming
+const testRunnerService = getTestRunnerService();
+testRunnerService.setEventEmitter(events);
+
 // Initialize Event Hook Service for custom event triggers (with history storage)
 eventHookService.initialize(events, settingsService, eventHistoryService, featureLoader);
 
@@ -326,7 +330,6 @@ app.use('/api/auto-mode', createAutoModeRoutes(autoModeService));
 app.use('/api/enhance-prompt', createEnhancePromptRoutes(settingsService));
 app.use('/api/worktree', createWorktreeRoutes(events, settingsService));
 app.use('/api/git', createGitRoutes());
-app.use('/api/suggestions', createSuggestionsRoutes(events, settingsService));
 app.use('/api/models', createModelsRoutes());
 app.use('/api/spec-regeneration', createSpecRegenerationRoutes(events, settingsService));
 app.use('/api/running-agents', createRunningAgentsRoutes(autoModeService));

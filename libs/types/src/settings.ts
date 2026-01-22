@@ -598,8 +598,8 @@ export interface PhaseModelConfig {
   backlogPlanningModel: PhaseModelEntry;
   /** Model for analyzing project structure */
   projectAnalysisModel: PhaseModelEntry;
-  /** Model for AI suggestions (feature, refactoring, security, performance) */
-  suggestionsModel: PhaseModelEntry;
+  /** Model for ideation view (generating AI suggestions for features, security, performance) */
+  ideationModel: PhaseModelEntry;
 
   // Memory tasks - for learning extraction and memory operations
   /** Model for extracting learnings from completed agent sessions */
@@ -862,6 +862,10 @@ export interface GlobalSettings {
   serverLogLevel?: ServerLogLevel;
   /** Enable HTTP request logging (Morgan). Default: true */
   enableRequestLogging?: boolean;
+
+  // Developer Tools
+  /** Show React Query DevTools panel (only in development mode). Default: true */
+  showQueryDevtools?: boolean;
 
   // AI Commit Message Generation
   /** Enable AI-generated commit messages when opening commit dialog (default: true) */
@@ -1178,6 +1182,14 @@ export interface ProjectSettings {
   /** Maximum concurrent agents for this project (overrides global maxConcurrency) */
   maxConcurrentAgents?: number;
 
+  // Test Runner Configuration
+  /**
+   * Custom command to run tests for this project.
+   * If not specified, auto-detection will be used based on project structure.
+   * Examples: "npm test", "yarn test", "pnpm test", "pytest", "go test ./..."
+   */
+  testCommand?: string;
+
   // Phase Model Overrides (per-project)
   /**
    * Override phase model settings for this project.
@@ -1185,6 +1197,13 @@ export interface ProjectSettings {
    * Allows per-project customization of which models are used for each task.
    */
   phaseModelOverrides?: Partial<PhaseModelConfig>;
+
+  // Feature Defaults Override (per-project)
+  /**
+   * Override the default model for new feature cards in this project.
+   * If not specified, falls back to the global defaultFeatureModel setting.
+   */
+  defaultFeatureModel?: PhaseModelEntry;
 
   // Deprecated Claude API Profile Override
   /**
@@ -1216,7 +1235,7 @@ export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
   featureGenerationModel: { model: 'claude-sonnet' },
   backlogPlanningModel: { model: 'claude-sonnet' },
   projectAnalysisModel: { model: 'claude-sonnet' },
-  suggestionsModel: { model: 'claude-sonnet' },
+  ideationModel: { model: 'claude-sonnet' },
 
   // Memory - use fast model for learning extraction (cost-effective)
   memoryExtractionModel: { model: 'claude-haiku' },
@@ -1279,6 +1298,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   muteDoneSound: false,
   serverLogLevel: 'info',
   enableRequestLogging: true,
+  showQueryDevtools: true,
   enableAiCommitMessages: true,
   phaseModels: DEFAULT_PHASE_MODELS,
   enhancementModel: 'sonnet', // Legacy alias still supported

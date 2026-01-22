@@ -58,6 +58,7 @@ const SETTINGS_FIELDS_TO_SYNC = [
   'muteDoneSound',
   'serverLogLevel',
   'enableRequestLogging',
+  'showQueryDevtools',
   'enhancementModel',
   'validationModel',
   'phaseModels',
@@ -595,7 +596,7 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
           projectAnalysisModel: migratePhaseModelEntry(
             serverSettings.phaseModels.projectAnalysisModel
           ),
-          suggestionsModel: migratePhaseModelEntry(serverSettings.phaseModels.suggestionsModel),
+          ideationModel: migratePhaseModelEntry(serverSettings.phaseModels.ideationModel),
           memoryExtractionModel: migratePhaseModelEntry(
             serverSettings.phaseModels.memoryExtractionModel
           ),
