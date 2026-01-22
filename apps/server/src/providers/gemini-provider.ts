@@ -118,6 +118,63 @@ export interface GeminiError extends Error {
   suggestion?: string;
 }
 
+// =============================================================================
+// Tool Name Normalization
+// =============================================================================
+
+/**
+ * Gemini CLI tool name to standard tool name mapping
+ * This allows the UI to properly categorize and display Gemini tool calls
+ */
+const GEMINI_TOOL_NAME_MAP: Record<string, string> = {
+  write_todos: 'TodoWrite',
+  read_file: 'Read',
+  read_many_files: 'Read',
+  replace: 'Edit',
+  write_file: 'Write',
+  run_shell_command: 'Bash',
+  search_file_content: 'Grep',
+  glob: 'Glob',
+  list_directory: 'Ls',
+  web_fetch: 'WebFetch',
+  google_web_search: 'WebSearch',
+};
+
+/**
+ * Normalize Gemini tool names to standard tool names
+ */
+function normalizeGeminiToolName(geminiToolName: string): string {
+  return GEMINI_TOOL_NAME_MAP[geminiToolName] || geminiToolName;
+}
+
+/**
+ * Normalize Gemini tool input parameters to standard format
+ *
+ * Gemini `write_todos` format:
+ * {"todos": [{"description": "Task text", "status": "pending|in_progress|completed|cancelled"}]}
+ *
+ * Claude `TodoWrite` format:
+ * {"todos": [{"content": "Task text", "status": "pending|in_progress|completed", "activeForm": "..."}]}
+ */
+function normalizeGeminiToolInput(
+  toolName: string,
+  input: Record<string, unknown>
+): Record<string, unknown> {
+  // Normalize write_todos: map 'description' to 'content', handle 'cancelled' status
+  if (toolName === 'write_todos' && Array.isArray(input.todos)) {
+    return {
+      todos: input.todos.map((todo: { description?: string; status?: string }) => ({
+        content: todo.description || '',
+        // Map 'cancelled' to 'completed' since Claude doesn't have cancelled status
+        status: todo.status === 'cancelled' ? 'completed' : todo.status,
+        // Use description as activeForm since Gemini doesn't have it
+        activeForm: todo.description || '',
+      })),
+    };
+  }
+  return input;
+}
+
 /**
  * GeminiProvider - Integrates Gemini CLI as an AI provider
  *
@@ -212,6 +269,13 @@ export class GeminiProvider extends CliProvider {
     // Use explicit approval-mode for clearer semantics
     cliArgs.push('--approval-mode', 'yolo');
 
+    // Explicitly include the working directory in allowed workspace directories
+    // This ensures Gemini CLI allows file operations in the project directory,
+    // even if it has a different workspace cached from a previous session
+    if (options.cwd) {
+      cliArgs.push('--include-directories', options.cwd);
+    }
+
     // Note: Gemini CLI doesn't have a --thinking-level flag.
     // Thinking capabilities are determined by the model selection (e.g., gemini-2.5-pro).
     // The model handles thinking internally based on the task complexity.
@@ -263,6 +327,12 @@ export class GeminiProvider extends CliProvider {
 
       case 'tool_use': {
         const toolEvent = geminiEvent as GeminiToolUseEvent;
+        const normalizedName = normalizeGeminiToolName(toolEvent.tool_name);
+        const normalizedInput = normalizeGeminiToolInput(
+          toolEvent.tool_name,
+          toolEvent.parameters as Record<string, unknown>
+        );
+
         return {
           type: 'assistant',
           session_id: toolEvent.session_id,
@@ -271,9 +341,9 @@ export class GeminiProvider extends CliProvider {
             content: [
               {
                 type: 'tool_use',
-                name: toolEvent.tool_name,
+                name: normalizedName,
                 tool_use_id: toolEvent.tool_id,
-                input: toolEvent.parameters,
+                input: normalizedInput,
               },
             ],
           },
