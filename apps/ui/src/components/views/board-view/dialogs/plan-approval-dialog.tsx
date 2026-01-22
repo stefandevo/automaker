@@ -135,10 +135,7 @@ export function PlanApprovalDialog({
                 disabled={isLoading}
               />
             ) : (
-              <LogViewer
-                output={editedPlan || 'No plan content available.'}
-                className="p-4"
-              />
+              <LogViewer output={editedPlan || 'No plan content available.'} className="p-4" />
             )}
           </div>
 
