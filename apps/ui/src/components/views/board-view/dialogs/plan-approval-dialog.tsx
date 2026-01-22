@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { LogViewer } from '@/components/ui/log-viewer';
+import { PlanContentViewer } from './plan-content-viewer';
 import { Label } from '@/components/ui/label';
 import { Feature } from '@/store/app-store';
 import { Check, RefreshCw, Edit2, Eye } from 'lucide-react';
@@ -135,7 +135,7 @@ export function PlanApprovalDialog({
                 disabled={isLoading}
               />
             ) : (
-              <LogViewer output={editedPlan || 'No plan content available.'} className="p-4" />
+              <PlanContentViewer content={editedPlan || ''} className="p-4" />
             )}
           </div>
 
