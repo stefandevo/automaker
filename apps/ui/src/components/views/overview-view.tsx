@@ -129,7 +129,14 @@ export function OverviewView() {
         const projectPath = `${parentDir}/${projectName}`;
 
         await api.mkdir(projectPath);
-        await initializeProject(projectPath);
+
+        const initResult = await initializeProject(projectPath);
+        if (!initResult.success) {
+          toast.error('Failed to initialize project', {
+            description: initResult.error || 'Unknown error occurred',
+          });
+          return;
+        }
 
         await api.writeFile(
           `${projectPath}/.automaker/app_spec.txt`,
@@ -185,7 +192,13 @@ export function OverviewView() {
           return;
         }
 
-        await initializeProject(cloneResult.projectPath);
+        const initResult = await initializeProject(cloneResult.projectPath);
+        if (!initResult.success) {
+          toast.error('Failed to initialize project', {
+            description: initResult.error || 'Unknown error occurred',
+          });
+          return;
+        }
 
         const project = {
           id: `project-${Date.now()}`,
@@ -228,7 +241,13 @@ export function OverviewView() {
           return;
         }
 
-        await initializeProject(cloneResult.projectPath);
+        const initResult = await initializeProject(cloneResult.projectPath);
+        if (!initResult.success) {
+          toast.error('Failed to initialize project', {
+            description: initResult.error || 'Unknown error occurred',
+          });
+          return;
+        }
 
         const project = {
           id: `project-${Date.now()}`,
